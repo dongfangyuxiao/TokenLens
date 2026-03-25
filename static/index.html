@@ -1,0 +1,2992 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>春静企业代码安全平台</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;
+  background:#f0f2f5;color:#1a1a1a;display:flex;height:100vh;overflow:hidden}
+/* 侧边栏 */
+.sidebar{width:230px;
+  background:linear-gradient(180deg,#050f22 0%,#071428 60%,#050c1e 100%);
+  display:flex;flex-direction:column;flex-shrink:0;
+  border-right:1px solid rgba(0,150,255,.12)}
+nav{flex:1;padding:8px 0;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px;
+  color:rgba(160,210,255,.55);cursor:pointer;font-size:13px;transition:.2s;
+  border-left:2px solid transparent;position:relative}
+.nav-item:hover{color:rgba(200,235,255,.9);background:rgba(0,140,255,.07);
+  border-left-color:rgba(0,180,255,.3)}
+.nav-item.active{color:#38bdf8;background:rgba(0,140,255,.12);border-left-color:#38bdf8}
+.nav-item.active::after{content:'';position:absolute;right:0;top:20%;bottom:20%;
+  width:2px;background:#38bdf8;border-radius:2px;opacity:.5}
+.nav-item .icon{font-size:15px;width:20px;text-align:center}
+/* 主内容 */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:#fff;padding:0 24px;height:54px;display:flex;align-items:center;
+  justify-content:space-between;border-bottom:1px solid #eef0f5;flex-shrink:0;
+  box-shadow:0 1px 8px rgba(0,60,180,.06)}
+.page-title{font-size:15px;font-weight:700;color:#0f2044;letter-spacing:.03em}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#52c41a;display:inline-block}
+.status-dot.idle{background:#52c41a}
+.status-dot.running{background:#1890ff;animation:pulse 1s infinite}
+.status-dot.paused{background:#d46b08}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;
+  cursor:pointer;transition:.15s}
+.btn:active{opacity:.8}
+.btn-primary{background:#1677ff;color:#fff}
+.btn-danger{background:#ff4d4f;color:#fff}
+.btn-default{background:#fff;color:#555;border:1px solid #d9d9d9}
+.btn-sm{padding:5px 12px;font-size:12px}
+.content{flex:1;overflow-y:auto;padding:24px}
+/* 卡片 */
+.card{background:#fff;border-radius:12px;padding:20px;margin-bottom:16px;
+  box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.card-title{font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:16px;
+  display:flex;align-items:center;justify-content:space-between}
+/* 表格 */
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:12px;color:#888;font-weight:600;padding:8px 12px;
+  border-bottom:1px solid #f0f0f0;background:#fafafa}
+td{padding:10px 12px;font-size:13px;border-bottom:1px solid #f5f5f5;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+/* 表单 */
+.form-row{display:grid;gap:12px;margin-bottom:12px}
+.form-row.col2{grid-template-columns:1fr 1fr}
+.form-row.col3{grid-template-columns:1fr 1fr 1fr}
+.form-group{display:flex;flex-direction:column;gap:5px}
+label{font-size:12px;color:#888;font-weight:600}
+input,select,textarea{border:1px solid #e8e8e8;border-radius:8px;padding:9px 12px;
+  font-size:13px;color:#1a1a1a;outline:none;font-family:inherit;
+  transition:border-color .2s;width:100%}
+input:focus,select:focus,textarea:focus{border-color:#1677ff}
+textarea{resize:vertical;min-height:80px}
+/* 统计卡片 */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.stat-num{font-size:28px;font-weight:800;line-height:1}
+.stat-label{font-size:12px;color:#888;margin-top:6px}
+.stat-card.total .stat-num{color:#1677ff}
+.stat-card.critical .stat-num{color:#ff4d4f}
+.stat-card.high .stat-num{color:#fa8c16}
+.stat-card.medium .stat-num{color:#d4b106}
+/* 徽章 */
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700}
+.badge-critical{background:#fff1f0;color:#ff4d4f}
+.badge-high{background:#fff7e6;color:#fa8c16}
+.badge-medium{background:#feffe6;color:#d4b106}
+.badge-low{background:#f6ffed;color:#52c41a}
+.badge-done{background:#f6ffed;color:#52c41a}
+.badge-running{background:#e6f4ff;color:#1677ff}
+.badge-error{background:#fff1f0;color:#ff4d4f}
+.badge-stopped{background:#f5f5f5;color:#888}
+.badge-paused{background:#fff7e6;color:#d46b08}
+.badge-github{background:#f0f0f0;color:#333}
+.badge-gitlab{background:#fff0f6;color:#c41d7f}
+.badge-bitbucket{background:#e6f0ff;color:#0052cc}
+.badge-gitee{background:#fff2e8;color:#d4380d}
+.badge-tgit{background:#f0fff0;color:#237804}
+.badge-codeup{background:#fff7e6;color:#d46b08}
+/* 开关 */
+.toggle{position:relative;width:40px;height:22px;display:inline-block}
+.toggle input{opacity:0;width:0;height:0}
+.toggle-slider{position:absolute;inset:0;background:#ccc;border-radius:22px;cursor:pointer;transition:.3s}
+.toggle-slider:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;
+  background:#fff;border-radius:50%;transition:.3s}
+.toggle input:checked + .toggle-slider{background:#1677ff}
+.toggle input:checked + .toggle-slider:before{transform:translateX(18px)}
+/* 弹窗 */
+.modal-mask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;
+  align-items:center;justify-content:center}
+.modal-mask.show{display:flex}
+.modal{background:#fff;border-radius:14px;padding:24px;width:480px;max-width:95vw;
+  max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.15)}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:20px}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+/* Toast */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:#333;color:#fff;padding:10px 20px;border-radius:24px;font-size:13px;
+  opacity:0;transition:.3s;pointer-events:none;z-index:200;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+/* 空状态 */
+.empty{text-align:center;padding:40px;color:#bbb;font-size:14px}
+/* 漏洞详情弹窗 */
+.modal-wide{width:900px;max-width:98vw}
+.modal-xl{width:1000px;max-width:98vw}
+.finding-item{border:1px solid #f0f0f0;border-radius:8px;padding:14px 16px;margin-bottom:10px}
+.finding-item:last-child{margin-bottom:0}
+.finding-item .fi-header{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+.finding-item .fi-file{font-size:12px;color:#888;margin-bottom:4px}
+.finding-item .fi-desc{font-size:13px;color:#444;line-height:1.6;margin-bottom:6px}
+.finding-item .fi-rec{font-size:12px;color:#1677ff;background:#f0f5ff;padding:8px 12px;border-radius:6px}
+.finding-item .fi-commit{font-size:11px;color:#aaa;margin-top:6px}
+.finding-item .fi-status{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.fi-group-title{font-size:13px;font-weight:700;color:#444;margin:14px 0 8px;
+  padding-bottom:6px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:8px}
+.fi-group-title:first-child{margin-top:0}
+.fi-owner-badge{font-size:11px;font-weight:400;background:#f5f0ff;color:#531dab;padding:2px 8px;border-radius:10px}
+#findings-filter{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.sev-tab{padding:4px 12px;border:1px solid #e8e8e8;border-radius:16px;font-size:12px;
+  font-weight:600;cursor:pointer;background:#fff;color:#666;transition:.15s}
+.sev-tab.active{border-color:#1677ff;background:#e6f4ff;color:#1677ff}
+.sev-tab.critical.active{border-color:#ff4d4f;background:#fff1f0;color:#ff4d4f}
+.sev-tab.high.active{border-color:#fa8c16;background:#fff7e6;color:#fa8c16}
+.sev-tab.medium.active{border-color:#d4b106;background:#feffe6;color:#d4b106}
+.sev-tab.low.active{border-color:#52c41a;background:#f6ffed;color:#52c41a}
+/* 漏洞状态徽章 */
+.badge-status-new{background:#e6f4ff;color:#1677ff}
+.badge-status-fixing{background:#fff7e6;color:#d46b08}
+.badge-status-fixed{background:#f6ffed;color:#389e0d}
+.badge-status-wont_fix{background:#f5f5f5;color:#888}
+/* 扫描日志弹窗 */
+.log-container{background:#1a1a1a;border-radius:8px;padding:12px 16px;font-family:monospace;
+  font-size:12px;line-height:1.6;max-height:500px;overflow-y:auto;color:#d4d4d4}
+.log-line{white-space:pre-wrap;word-break:break-all}
+.log-line.error{color:#ff6b6b}
+.log-line.warning{color:#ffa726}
+.log-line.info{color:#d4d4d4}
+/* 测试连接结果 */
+#testConnResult{font-size:13px;margin-top:10px;min-height:20px;padding:6px 10px;border-radius:6px;display:none}
+#testConnResult.ok{background:#f6ffed;color:#389e0d}
+#testConnResult.err{background:#fff1f0;color:#ff4d4f}
+/* ── 登录页 ── */
+#login-page{display:none;position:fixed;inset:0;z-index:999;
+  align-items:center;justify-content:center;overflow:hidden;
+  background:linear-gradient(135deg,#050c1a 0%,#0b1a36 55%,#051020 100%)}
+#login-page.show{display:flex}
+
+/* ── 春意背景文字 ── */
+#login-page .login-bg-text{
+  position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+/* 竖排对联，分列登录框两侧 */
+#login-page .login-bg-text span{
+  position:absolute;top:50%;
+  writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;
+  font-size:clamp(36px,5vw,80px);font-weight:900;letter-spacing:.25em;
+  line-height:1;user-select:none;
+  font-family:'PingFang SC','Noto Serif SC','Hiragino Serif','Source Han Serif','Microsoft YaHei',serif;
+  background:linear-gradient(180deg,#f9c784 0%,#ffb7c5 40%,#e8a0c0 68%,#a8d8b9 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 2px 16px rgba(255,140,180,.38)) drop-shadow(0 0 32px rgba(255,180,120,.25))}
+#login-page .login-bg-text span:first-child{
+  left:6vw;transform:translateY(-50%);
+  animation:spring-float1 7s ease-in-out infinite}
+#login-page .login-bg-text span:last-child{
+  right:6vw;transform:translateY(-50%);
+  animation:spring-float2 7s ease-in-out infinite;animation-delay:.9s}
+@keyframes spring-float1{
+  0%,100%{opacity:.58;transform:translateY(-50%) translateX(0)}
+  50%{opacity:.75;transform:translateY(-50%) translateX(-7px)}}
+@keyframes spring-float2{
+  0%,100%{opacity:.52;transform:translateY(-50%) translateX(0)}
+  50%{opacity:.68;transform:translateY(-50%) translateX(7px)}}
+
+/* 电路网格叠加 */
+#login-page::before{content:'';position:absolute;inset:0;z-index:0;
+  background-image:
+    linear-gradient(rgba(0,140,255,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,140,255,.03) 1px,transparent 1px);
+  background-size:44px 44px}
+
+/* 扫描线 */
+#login-page::after{content:'';position:absolute;left:0;right:0;height:1px;z-index:0;
+  background:linear-gradient(90deg,transparent,rgba(255,160,200,.4),rgba(255,200,120,.3),transparent);
+  animation:scanline 6s linear infinite;top:-1px}
+@keyframes scanline{0%{top:-1px}100%{top:100%}}
+
+/* 角落光晕 —— 春色 */
+.login-glow{position:absolute;border-radius:50%;pointer-events:none;z-index:0;filter:blur(70px)}
+.login-glow-a{width:420px;height:420px;background:rgba(255,140,180,.1);top:-100px;right:-80px}
+.login-glow-b{width:300px;height:300px;background:rgba(120,220,160,.09);bottom:-70px;left:-50px}
+.login-glow-c{width:200px;height:200px;background:rgba(255,190,100,.07);top:30%;left:-60px}
+
+/* ── 飘落花瓣 ── */
+.petal{position:absolute;pointer-events:none;z-index:0;opacity:0;
+  animation:petal-fall linear infinite}
+@keyframes petal-fall{
+  0%  {opacity:0;transform:translateY(-30px) rotate(0deg) translateX(0)}
+  6%  {opacity:.9}
+  25% {transform:translateY(25vh) rotate(160deg) translateX(18px)}
+  50% {transform:translateY(50vh) rotate(320deg) translateX(-14px);opacity:.7}
+  75% {transform:translateY(75vh) rotate(480deg) translateX(22px)}
+  88% {opacity:.45}
+  100%{opacity:0;transform:translateY(106vh) rotate(680deg) translateX(8px)}}
+
+/* 登录卡片 */
+.login-box{position:relative;z-index:1;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(0,180,255,.18);
+  border-radius:20px;padding:44px 40px;width:400px;
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  box-shadow:0 0 0 1px rgba(0,180,255,.06),0 0 60px rgba(0,100,255,.12),0 24px 64px rgba(0,0,0,.55)}
+
+/* 顶部扫描线装饰 */
+.login-box::before{content:'';position:absolute;top:0;left:12%;right:12%;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(0,200,255,.7),transparent);border-radius:1px}
+
+.login-logo{text-align:center;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:12px}
+.login-logo-text{font-size:20px;font-weight:800;
+  background:linear-gradient(135deg,#e8f4ff 0%,#7dd3fc 50%,#38bdf8 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  letter-spacing:.04em}
+.login-sub{text-align:center;font-size:12px;color:rgba(150,200,255,.55);
+  margin-bottom:30px;letter-spacing:.1em}
+.login-box .form-group{margin-bottom:18px}
+.login-box label{font-size:12px;color:rgba(150,200,255,.7);font-weight:600;
+  display:block;margin-bottom:7px;letter-spacing:.05em}
+.login-box input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(0,180,255,.2);
+  color:#e8f4ff;border-radius:10px;padding:11px 14px;font-size:13px;
+  transition:border-color .2s,box-shadow .2s}
+.login-box input::placeholder{color:rgba(150,200,255,.3)}
+.login-box input:focus{border-color:rgba(0,200,255,.6);
+  box-shadow:0 0 0 3px rgba(0,180,255,.12);outline:none;background:rgba(255,255,255,.08)}
+.login-err{color:#ff6b6b;font-size:12px;margin-top:10px;text-align:center;min-height:18px}
+.btn-login{width:100%;padding:12px;font-size:14px;font-weight:700;margin-top:8px;
+  background:linear-gradient(135deg,#0052cc,#0ea5e9);border:none;border-radius:10px;
+  color:#fff;cursor:pointer;letter-spacing:.08em;
+  box-shadow:0 4px 20px rgba(0,120,255,.35);transition:.2s}
+.btn-login:hover{box-shadow:0 6px 28px rgba(0,150,255,.5);transform:translateY(-1px)}
+.btn-login:active{transform:translateY(0);opacity:.9}
+
+/* ── 侧边栏 Logo ── */
+.logo{padding:18px 16px;border-bottom:1px solid rgba(0,180,255,.1);
+  display:flex;align-items:center;gap:10px;cursor:default;
+  background:linear-gradient(135deg,rgba(0,60,140,.6),rgba(0,30,80,.4))}
+.logo-name{display:flex;flex-direction:column;line-height:1.2}
+.logo-name-main{font-size:14px;font-weight:800;
+  background:linear-gradient(135deg,#7dd3fc,#38bdf8,#0ea5e9);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  letter-spacing:.06em}
+.logo-name-sub{font-size:10px;color:rgba(100,180,255,.5);letter-spacing:.12em;margin-top:1px}
+</style>
+</head>
+<body>
+
+<!-- 登录页 -->
+<div id="login-page">
+  <!-- 背景装饰 -->
+  <div class="login-bg-text" aria-hidden="true">
+    <span>言念君子</span>
+    <span>温其如玉</span>
+  </div>
+  <div class="login-glow login-glow-a"></div>
+  <div class="login-glow login-glow-b"></div>
+  <div class="login-glow login-glow-c"></div>
+  <div id="login-petals" aria-hidden="true"></div>
+
+  <div class="login-box">
+    <div class="login-logo">
+      <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#38bdf8"/>
+            <stop offset="100%" stop-color="#0052cc"/>
+          </linearGradient>
+          <filter id="glow-l" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- 外六边形 -->
+        <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
+          fill="url(#hg)" opacity=".18" filter="url(#glow-l)"/>
+        <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
+          fill="none" stroke="url(#hg)" stroke-width="1.5" filter="url(#glow-l)"/>
+        <!-- 内盾形 -->
+        <path d="M19 9 L28 13.5 L28 21 Q28 28 19 31.5 Q10 28 10 21 L10 13.5 Z"
+          fill="none" stroke="#38bdf8" stroke-width="1.2" opacity=".7"/>
+        <!-- 代码符号 -->
+        <text x="19" y="25" text-anchor="middle" font-size="10" font-weight="900"
+          fill="#7dd3fc" font-family="monospace" filter="url(#glow-l)">&lt;/&gt;</text>
+        <!-- 角落小圆点装饰 -->
+        <circle cx="19" cy="2" r="1.5" fill="#38bdf8" opacity=".8"/>
+        <circle cx="34" cy="10.5" r="1.5" fill="#38bdf8" opacity=".6"/>
+        <circle cx="34" cy="27.5" r="1.5" fill="#38bdf8" opacity=".6"/>
+        <circle cx="19" cy="36" r="1.5" fill="#38bdf8" opacity=".8"/>
+        <circle cx="4" cy="27.5" r="1.5" fill="#38bdf8" opacity=".6"/>
+        <circle cx="4" cy="10.5" r="1.5" fill="#38bdf8" opacity=".6"/>
+      </svg>
+      <span class="login-logo-text">春静企业代码安全平台</span>
+    </div>
+    <div class="login-sub">ENTERPRISE CODE SECURITY PLATFORM</div>
+    <div class="form-group">
+      <label>用 户 名</label>
+      <input id="login-user" type="text" placeholder="请输入用户名" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>密　　码</label>
+      <input id="login-pass" type="password" placeholder="请输入密码" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <div class="login-err" id="login-err"></div>
+    <button class="btn-login" onclick="doLogin()" id="login-btn">登　录</button>
+  </div>
+</div>
+
+<!-- 主应用 -->
+<div id="app" style="display:none;width:100%;height:100%;display:none;flex-direction:row">
+<aside class="sidebar">
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#38bdf8"/>
+          <stop offset="100%" stop-color="#0052cc"/>
+        </linearGradient>
+      </defs>
+      <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
+        fill="url(#sg)" opacity=".22"/>
+      <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
+        fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+      <path d="M19 9 L28 13.5 L28 21 Q28 28 19 31.5 Q10 28 10 21 L10 13.5 Z"
+        fill="none" stroke="#7dd3fc" stroke-width="1.2" opacity=".8"/>
+      <text x="19" y="25" text-anchor="middle" font-size="10" font-weight="900"
+        fill="#7dd3fc" font-family="monospace">&lt;/&gt;</text>
+    </svg>
+    <div class="logo-name">
+      <span class="logo-name-main">春静安全</span>
+      <span class="logo-name-sub">CODE SECURITY</span>
+    </div>
+  </div>
+  <nav>
+    <div class="nav-item active" onclick="nav('dashboard')"><span class="icon">📊</span>概览</div>
+    <div class="nav-item" onclick="nav('accounts')"><span class="icon">🔑</span>账户配置</div>
+    <div class="nav-item" onclick="nav('repoowners')"><span class="icon">👥</span>仓库负责人</div>
+    <div class="nav-item" onclick="nav('channels')"><span class="icon">🔔</span>通知渠道</div>
+    <div class="nav-item" onclick="nav('instant')"><span class="icon">⚡</span>即时分析</div>
+    <div class="nav-item" onclick="nav('ai')"><span class="icon">🤖</span>AI 配置</div>
+    <div class="nav-item" onclick="nav('history')"><span class="icon">📋</span>扫描历史</div>
+    <div class="nav-item" onclick="nav('stats')"><span class="icon">📈</span>漏洞统计</div>
+    <div class="nav-item" onclick="nav('prompts')"><span class="icon">📝</span>提示词</div>
+    <div class="nav-item" onclick="nav('whitelist')"><span class="icon">🛡️</span>误报白名单</div>
+    <div class="nav-item" onclick="nav('users')"><span class="icon">👤</span>账户管理</div>
+    <div class="nav-item" onclick="nav('settings')"><span class="icon">⚙️</span>系统设置</div>
+  </nav>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <div class="page-title" id="pageTitle">概览</div>
+    <div class="topbar-right">
+      <span id="statusText" style="font-size:13px;color:#888"></span>
+      <span class="status-dot" id="statusDot"></span>
+      <button class="btn btn-default" onclick="triggerScan('poison')" id="poisonBtn">投毒检测</button>
+      <button class="btn btn-primary" onclick="triggerScan('incremental_audit')" id="scanBtn">增量审计</button>
+      <button class="btn btn-default" onclick="triggerScan('full_audit')" id="fullScanBtn">全量审计</button>
+      <button class="btn btn-default" onclick="pauseResumeScan()" id="pauseBtn" style="display:none">暂停</button>
+      <button class="btn btn-default" onclick="stopScan()" id="stopBtn" style="display:none;color:#ff4d4f;border-color:#ff4d4f">停止</button>
+      <button class="btn btn-default btn-sm" onclick="doLogout()" style="margin-left:4px">退出</button>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- 概览 -->
+    <div id="s-dashboard">
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-card total"><div class="stat-num" id="st-total">-</div><div class="stat-label">近期发现总数</div></div>
+        <div class="stat-card critical"><div class="stat-num" id="st-critical">-</div><div class="stat-label">严重</div></div>
+        <div class="stat-card high"><div class="stat-num" id="st-high">-</div><div class="stat-label">高危</div></div>
+        <div class="stat-card medium"><div class="stat-num" id="st-medium">-</div><div class="stat-label">中危</div></div>
+      </div>
+      <div class="card" style="padding:12px 20px">
+        <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;font-size:13px">
+          <div>
+            <span style="color:#888;margin-right:4px">🛡️ 投毒检测：</span>
+            <span id="dash-poison-summary" style="color:#1677ff;font-weight:600">—</span>
+          </div>
+          <div>
+            <span style="color:#888;margin-right:4px">🔍 增量代码审计：</span>
+            <span id="dash-inc-summary" style="color:#722ed1;font-weight:600">—</span>
+          </div>
+          <div>
+            <span style="color:#888;margin-right:4px">📦 全量代码审计：</span>
+            <span id="dash-full-summary" style="color:#52c41a;font-weight:600">—</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">最近扫描记录</div>
+        <div id="dashScans"></div>
+      </div>
+    </div>
+
+    <!-- 账户配置 -->
+    <div id="s-accounts" style="display:none">
+      <div class="card">
+        <div class="card-title">
+          账户列表
+          <button class="btn btn-primary btn-sm" onclick="showAddAccount()">+ 添加账户</button>
+        </div>
+        <div id="accountList"></div>
+      </div>
+    </div>
+
+    <!-- 仓库负责人 -->
+    <div id="s-repoowners" style="display:none">
+      <div class="card">
+        <div class="card-title">
+          仓库负责人配置
+          <button class="btn btn-primary btn-sm" onclick="showAddRepoOwner()">+ 添加映射</button>
+        </div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          配置代码仓库与负责人的对应关系，将在漏洞详情中显示该仓库的责任人信息。
+        </div>
+        <div id="repoOwnerList"></div>
+      </div>
+    </div>
+
+    <!-- 通知渠道 -->
+    <div id="s-channels" style="display:none">
+      <div class="card">
+        <div class="card-title">
+          通知渠道
+          <button class="btn btn-primary btn-sm" onclick="showAddChannel()">+ 添加渠道</button>
+        </div>
+        <div id="channelList"></div>
+      </div>
+    </div>
+
+    <!-- 即时分析 -->
+    <div id="s-instant" style="display:none">
+      <div class="card">
+        <div class="card-title">即时代码分析</div>
+        <!-- 模式切换标签 -->
+        <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:2px solid #f0f0f0">
+          <button id="ia_tab_paste" onclick="iaTab('paste')"
+            style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;color:#1677ff;border-bottom:2px solid #1677ff;margin-bottom:-2px">
+            📋 粘贴代码
+          </button>
+          <button id="ia_tab_upload" onclick="iaTab('upload')"
+            style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
+            📁 上传文件
+          </button>
+        </div>
+
+        <!-- 粘贴模式 -->
+        <div id="ia_panel_paste">
+          <div style="font-size:13px;color:#888;margin-bottom:16px">
+            粘贴任意代码片段直接进行 AI 安全审计，无需 git commit。
+          </div>
+          <div class="form-row col2">
+            <div class="form-group">
+              <label>文件名（用于匹配提示词）</label>
+              <input id="ia_filename" placeholder="如：app.py / UserController.java / index.js" value="snippet.py">
+            </div>
+            <div class="form-group">
+              <label>语言（仅提示，不影响匹配）</label>
+              <input id="ia_lang" placeholder="Python / Java / JavaScript…">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>代码内容（最多 30000 字符）</label>
+              <textarea id="ia_code" style="min-height:280px;font-family:monospace;font-size:12px;line-height:1.5"
+                placeholder="粘贴代码到这里…"></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="runInstantAnalysis()" id="iaBtn">🔍 开始分析</button>
+            <span id="iaStatus" style="font-size:13px;color:#888"></span>
+          </div>
+        </div>
+
+        <!-- 上传模式 -->
+        <div id="ia_panel_upload" style="display:none">
+          <div style="font-size:13px;color:#888;margin-bottom:16px">
+            上传单个文件、多个文件、整个文件夹或 ZIP 压缩包，批量进行 AI 安全审计。
+          </div>
+
+          <!-- 拖拽区域 -->
+          <div id="ia_dropzone"
+            style="border:2px dashed #d9d9d9;border-radius:10px;padding:32px;text-align:center;color:#aaa;cursor:pointer;margin-bottom:16px;transition:.2s;background:#fafafa"
+            onclick="document.getElementById('ia_file_input').click()"
+            ondragover="iaDragOver(event)" ondragleave="iaDragLeave(event)" ondrop="iaDrop(event)">
+            <div style="font-size:32px;margin-bottom:8px">📂</div>
+            <div style="font-size:14px;color:#555;font-weight:600">点击选择或拖拽文件到此处</div>
+            <div style="font-size:12px;margin-top:6px">支持单文件、多文件、文件夹、ZIP 压缩包（最多 50 个文件，单文件 ≤ 300 KB）</div>
+          </div>
+
+          <!-- 隐藏的文件输入 -->
+          <input type="file" id="ia_file_input" multiple accept="*/*" style="display:none" onchange="iaFileSelected(event)">
+
+          <!-- 上传方式切换 -->
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+            <button class="btn btn-default btn-sm" onclick="iaPickFiles()">选择文件</button>
+            <button class="btn btn-default btn-sm" onclick="iaPickFolder()">选择文件夹</button>
+            <button class="btn btn-default btn-sm" onclick="iaPickZip()">选择 ZIP</button>
+          </div>
+
+          <!-- 已选文件列表 -->
+          <div id="ia_file_list" style="display:none;margin-bottom:16px">
+            <div style="font-size:12px;color:#888;margin-bottom:8px" id="ia_file_count"></div>
+            <div id="ia_file_names" style="max-height:120px;overflow-y:auto;font-size:12px;font-family:monospace;
+              background:#f5f5f5;border-radius:6px;padding:8px 12px;line-height:1.8"></div>
+          </div>
+
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="runInstantUpload()" id="iaUploadBtn">🔍 开始分析</button>
+            <button class="btn btn-default btn-sm" onclick="iaClearFiles()" id="iaClearBtn" style="display:none">清空</button>
+            <span id="iaUploadStatus" style="font-size:13px;color:#888"></span>
+          </div>
+        </div>
+      </div>
+
+      <div id="ia_result" style="display:none">
+        <div class="card">
+          <div class="card-title" id="ia_result_title">分析结果</div>
+          <div id="ia_findings"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI 配置 -->
+    <div id="s-ai" style="display:none">
+      <div class="card">
+        <div class="card-title">AI 模型配置</div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          选择 LLM 提供商并填写 API Key；支持 DeepSeek、Qwen/通义、Claude、Ollama 等 10+ 种模型。
+        </div>
+        <div class="form-row col2">
+          <div class="form-group">
+            <label>提供商</label>
+            <select id="llmProvider" onchange="onProviderChange()">
+              <option value="">-- 请选择 --</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="qwen">通义千问 (Qwen)</option>
+              <option value="zhipu">智谱 AI (Zhipu)</option>
+              <option value="moonshot">月之暗面 (Moonshot)</option>
+              <option value="doubao">字节豆包 (Doubao)</option>
+              <option value="minimax">MiniMax</option>
+              <option value="baidu">百度文心 (Baidu)</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="ollama">Ollama（本地）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>模型名称（留空使用默认）</label>
+            <input id="llmModel" placeholder="" id="llmModel">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>API Key</label>
+            <input id="llmApiKey" type="password" placeholder="填写后保存，留空保持不变">
+          </div>
+        </div>
+        <div class="form-row" id="llmBaseUrlRow">
+          <div class="form-group">
+            <label>自定义 Base URL（Ollama / 私有部署时填写，其他留空）</label>
+            <input id="llmBaseUrl" placeholder="如：http://localhost:11434/v1">
+          </div>
+        </div>
+        <div style="font-size:12px;color:#888;margin-bottom:12px" id="llmProviderHint"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="saveLLM()">保存配置</button>
+          <span id="llmSavedInfo" style="font-size:12px;color:#888"></span>
+        </div>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0">
+          <div style="font-size:13px;font-weight:600;color:#555;margin-bottom:10px">旧版 API Key（保留兼容）</div>
+          <div class="form-row col2">
+            <div class="form-group">
+              <label>DeepSeek API Key</label>
+              <input id="deepseekKey" type="password" placeholder="sk-xxxxxxxxx">
+            </div>
+            <div class="form-group">
+              <label>Anthropic API Key</label>
+              <input id="anthropicKey" type="password" placeholder="sk-ant-xxxxxxxxx">
+            </div>
+          </div>
+          <button class="btn btn-default btn-sm" onclick="saveLegacyLLM()">保存旧版 Key</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 扫描历史 -->
+    <div id="s-history" style="display:none">
+      <div class="card">
+        <div class="card-title">扫描历史</div>
+        <div id="historyList"></div>
+      </div>
+    </div>
+
+    <!-- 漏洞统计 -->
+    <div id="s-stats" style="display:none">
+      <div class="card" style="padding:14px 20px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="display:flex;gap:4px" id="period-tabs">
+            <button class="btn btn-default btn-sm period-tab" data-p="day"  onclick="setPeriod('day')">按天</button>
+            <button class="btn btn-primary btn-sm period-tab" data-p="week" onclick="setPeriod('week')">按周</button>
+            <button class="btn btn-default btn-sm period-tab" data-p="year" onclick="setPeriod('year')">按月/年</button>
+          </div>
+          <select id="repo-filter" onchange="loadStats()" style="width:auto;min-width:160px">
+            <option value="all">全部代码库</option>
+          </select>
+        </div>
+      </div>
+      <div class="stat-grid" id="stats-cards" style="grid-template-columns:repeat(5,1fr)">
+        <div class="stat-card total">   <div class="stat-num" id="sc-total">-</div>   <div class="stat-label">漏洞总数</div></div>
+        <div class="stat-card critical"><div class="stat-num" id="sc-critical">-</div><div class="stat-label">严重</div></div>
+        <div class="stat-card high">    <div class="stat-num" id="sc-high">-</div>    <div class="stat-label">高危</div></div>
+        <div class="stat-card medium">  <div class="stat-num" id="sc-medium">-</div>  <div class="stat-label">中危</div></div>
+        <div class="stat-card" style="--c:#52c41a"><div class="stat-num" id="sc-low" style="color:#52c41a">-</div><div class="stat-label">低危</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title" id="stats-chart-title" style="margin-bottom:12px">漏洞趋势</div>
+        <canvas id="statsChart" height="260" style="width:100%;display:block"></canvas>
+        <div style="display:flex;gap:20px;padding-top:14px;font-size:12px;flex-wrap:wrap">
+          <span><span style="display:inline-block;width:10px;height:10px;background:#ff4d4f;border-radius:2px;vertical-align:middle;margin-right:4px"></span>严重</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#fa8c16;border-radius:2px;vertical-align:middle;margin-right:4px"></span>高危</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#fadb14;border-radius:2px;vertical-align:middle;margin-right:4px"></span>中危</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#95de64;border-radius:2px;vertical-align:middle;margin-right:4px"></span>低危</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">明细数据</div>
+        <div id="stats-table"></div>
+      </div>
+    </div>
+
+    <!-- 提示词管理 -->
+    <div id="s-prompts" style="display:none">
+      <div class="card">
+        <div class="card-title">
+          提示词管理
+          <button class="btn btn-primary btn-sm" onclick="showAddPrompt()">+ 添加提示词</button>
+        </div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          提示词按文件扩展名匹配；自定义提示词优先于内置提示词。支持占位符：<code style="background:#f5f5f5;padding:1px 5px;border-radius:3px">{filename}</code> <code style="background:#f5f5f5;padding:1px 5px;border-radius:3px">{message}</code> <code style="background:#f5f5f5;padding:1px 5px;border-radius:3px">{diff}</code>
+        </div>
+        <div id="promptList"></div>
+      </div>
+    </div>
+
+    <!-- 误报白名单 -->
+    <div id="s-whitelist" style="display:none">
+      <div class="card">
+        <div class="card-title">
+          误报白名单
+          <button class="btn btn-primary btn-sm" onclick="showAddWhitelist()">+ 添加规则</button>
+        </div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          匹配规则：<b>仓库路径</b>、<b>文件名</b>、<b>漏洞标题</b> 三个条件同时满足时过滤（留空则通配）。扫描时自动跳过命中的漏洞。
+        </div>
+        <div id="whitelistTable"></div>
+      </div>
+    </div>
+
+    <!-- 账户管理 -->
+    <div id="s-users" style="display:none">
+      <div class="card">
+        <div class="card-title">
+          管理员账户
+          <button class="btn btn-primary btn-sm" onclick="showAddUser()">+ 添加用户</button>
+        </div>
+        <div id="userList"></div>
+      </div>
+    </div>
+
+    <!-- 系统设置 -->
+    <div id="s-settings" style="display:none">
+      <!-- 增量扫描计划 -->
+      <div class="card">
+        <div class="card-title">
+          🛡️ 增量扫描计划
+          <button class="btn btn-primary btn-sm" onclick="showAddScheduleForm('poison')">+ 添加时间点</button>
+        </div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          专注于<strong>代码投毒、供应链攻击</strong>检测，扫描新增与修改文件。支持按小时、天、周自动执行。
+        </div>
+        <div id="scheduleList-poison"><div class="empty" style="padding:16px 0">加载中…</div></div>
+        <div id="addScheduleForm-poison" style="display:none;margin-top:12px;padding:12px;background:#f9f9f9;border-radius:8px;border:1px solid #e8e8e8">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">添加增量扫描时间点</div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div class="form-group" style="margin:0">
+              <label style="font-size:12px">执行频率</label>
+              <select id="newSched-poison-freq" onchange="onSchedFreqChange('poison')" style="width:90px">
+                <option value="hourly">每小时</option>
+                <option value="daily" selected>每天</option>
+                <option value="weekly">每周</option>
+              </select>
+            </div>
+            <div class="form-group" id="schedField-poison-weekday" style="margin:0;display:none">
+              <label style="font-size:12px">星期</label>
+              <select id="newSched-poison-weekday" onchange="updateAddSchedPreview('poison')" style="width:80px">
+                <option value="0">周一</option><option value="1">周二</option><option value="2">周三</option>
+                <option value="3">周四</option><option value="4">周五</option><option value="5">周六</option><option value="6">周日</option>
+              </select>
+            </div>
+            <div class="form-group" id="schedField-poison-hour" style="margin:0">
+              <label style="font-size:12px">小时（0-23）</label>
+              <input id="newSched-poison-hour" type="number" min="0" max="23" value="2" style="width:80px" oninput="updateAddSchedPreview('poison')">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label style="font-size:12px">分钟（0-59）</label>
+              <input id="newSched-poison-minute" type="number" min="0" max="59" value="0" style="width:80px" oninput="updateAddSchedPreview('poison')">
+            </div>
+            <div class="form-group" style="margin:0;flex:1;min-width:120px">
+              <label style="font-size:12px">备注（可选）</label>
+              <input id="newSched-poison-label" placeholder="如：每小时检测">
+            </div>
+            <div style="display:flex;gap:6px;padding-bottom:1px">
+              <button class="btn btn-primary btn-sm" onclick="submitAddSchedule('poison')">确认添加</button>
+              <button class="btn btn-default btn-sm" onclick="hideAddScheduleForm('poison')">取消</button>
+            </div>
+          </div>
+          <div id="addSchedPreview-poison" style="font-size:12px;color:#1677ff;margin-top:8px"></div>
+        </div>
+      </div>
+
+      <!-- 增量审计计划 -->
+      <div class="card">
+        <div class="card-title">
+          🔍 增量审计计划
+          <button class="btn btn-primary btn-sm" onclick="showAddScheduleForm('incremental_audit')">+ 添加时间点</button>
+        </div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          审计最近提交的所有文件变更，<strong>专注于严重和高危风险</strong>。支持按小时、天、周自动执行。
+        </div>
+        <div id="scheduleList-incremental_audit"><div class="empty" style="padding:16px 0">加载中…</div></div>
+        <div id="addScheduleForm-incremental_audit" style="display:none;margin-top:12px;padding:12px;background:#f9f9f9;border-radius:8px;border:1px solid #e8e8e8">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">添加增量审计时间点</div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div class="form-group" style="margin:0">
+              <label style="font-size:12px">执行频率</label>
+              <select id="newSched-incremental_audit-freq" onchange="onSchedFreqChange('incremental_audit')" style="width:90px">
+                <option value="hourly">每小时</option>
+                <option value="daily" selected>每天</option>
+                <option value="weekly">每周</option>
+              </select>
+            </div>
+            <div class="form-group" id="schedField-incremental_audit-weekday" style="margin:0;display:none">
+              <label style="font-size:12px">星期</label>
+              <select id="newSched-incremental_audit-weekday" onchange="updateAddSchedPreview('incremental_audit')" style="width:80px">
+                <option value="0">周一</option><option value="1">周二</option><option value="2">周三</option>
+                <option value="3">周四</option><option value="4">周五</option><option value="5">周六</option><option value="6">周日</option>
+              </select>
+            </div>
+            <div class="form-group" id="schedField-incremental_audit-hour" style="margin:0">
+              <label style="font-size:12px">小时（0-23）</label>
+              <input id="newSched-incremental_audit-hour" type="number" min="0" max="23" value="2" style="width:80px" oninput="updateAddSchedPreview('incremental_audit')">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label style="font-size:12px">分钟（0-59）</label>
+              <input id="newSched-incremental_audit-minute" type="number" min="0" max="59" value="0" style="width:80px" oninput="updateAddSchedPreview('incremental_audit')">
+            </div>
+            <div class="form-group" style="margin:0;flex:1;min-width:120px">
+              <label style="font-size:12px">备注（可选）</label>
+              <input id="newSched-incremental_audit-label" placeholder="如：凌晨审计">
+            </div>
+            <div style="display:flex;gap:6px;padding-bottom:1px">
+              <button class="btn btn-primary btn-sm" onclick="submitAddSchedule('incremental_audit')">确认添加</button>
+              <button class="btn btn-default btn-sm" onclick="hideAddScheduleForm('incremental_audit')">取消</button>
+            </div>
+          </div>
+          <div id="addSchedPreview-incremental_audit" style="font-size:12px;color:#722ed1;margin-top:8px"></div>
+        </div>
+      </div>
+
+      <!-- 全量审计计划 -->
+      <div class="card">
+        <div class="card-title">
+          📦 全量审计计划
+          <button class="btn btn-primary btn-sm" onclick="showAddScheduleForm('full_audit')">+ 添加时间点</button>
+        </div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          扫描 <strong>main/master 分支</strong>的完整历史提交，覆盖所有漏洞级别。支持按小时、天、周自动执行。
+        </div>
+        <div id="scheduleList-full_audit"><div class="empty" style="padding:16px 0">加载中…</div></div>
+        <div id="addScheduleForm-full_audit" style="display:none;margin-top:12px;padding:12px;background:#f9f9f9;border-radius:8px;border:1px solid #e8e8e8">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px">添加全量审计时间点</div>
+          <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+            <div class="form-group" style="margin:0">
+              <label style="font-size:12px">执行频率</label>
+              <select id="newSched-full_audit-freq" onchange="onSchedFreqChange('full_audit')" style="width:90px">
+                <option value="hourly">每小时</option>
+                <option value="daily">每天</option>
+                <option value="weekly" selected>每周</option>
+              </select>
+            </div>
+            <div class="form-group" id="schedField-full_audit-weekday" style="margin:0">
+              <label style="font-size:12px">星期</label>
+              <select id="newSched-full_audit-weekday" onchange="updateAddSchedPreview('full_audit')" style="width:80px">
+                <option value="0">周一</option><option value="1">周二</option><option value="2">周三</option>
+                <option value="3">周四</option><option value="4">周五</option><option value="5" selected>周六</option><option value="6">周日</option>
+              </select>
+            </div>
+            <div class="form-group" id="schedField-full_audit-hour" style="margin:0">
+              <label style="font-size:12px">小时（0-23）</label>
+              <input id="newSched-full_audit-hour" type="number" min="0" max="23" value="10" style="width:80px" oninput="updateAddSchedPreview('full_audit')">
+            </div>
+            <div class="form-group" style="margin:0">
+              <label style="font-size:12px">分钟（0-59）</label>
+              <input id="newSched-full_audit-minute" type="number" min="0" max="59" value="0" style="width:80px" oninput="updateAddSchedPreview('full_audit')">
+            </div>
+            <div class="form-group" style="margin:0;flex:1;min-width:120px">
+              <label style="font-size:12px">备注（可选）</label>
+              <input id="newSched-full_audit-label" placeholder="如：周六全量">
+            </div>
+            <div style="display:flex;gap:6px;padding-bottom:1px">
+              <button class="btn btn-primary btn-sm" onclick="submitAddSchedule('full_audit')">确认添加</button>
+              <button class="btn btn-default btn-sm" onclick="hideAddScheduleForm('full_audit')">取消</button>
+            </div>
+          </div>
+          <div id="addSchedPreview-full_audit" style="font-size:12px;color:#52c41a;margin-top:8px"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">其他扫描设置</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>单文件最大 Diff 字符数</label>
+            <input id="maxDiff" type="number" min="1000" max="50000" value="12000">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveSettings()">保存</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">扫描工具配置</div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          未配置 LLM API Key 时，自动使用 Semgrep + OpenSCA 进行扫描。配置 Token 可获取更多规则/漏洞数据，留空则使用本地扫描。
+        </div>
+        <div class="form-row col2">
+          <div class="form-group">
+            <label>OpenSCA Token（可选）</label>
+            <input id="opescaToken" type="password" placeholder="留空则仅本地扫描">
+          </div>
+          <div class="form-group">
+            <label>Semgrep Token（可选，用于 Pro 规则）</label>
+            <input id="semgrepToken" type="password" placeholder="留空则使用社区规则">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="saveToolSettings()">保存</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Syslog 日志同步</div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          将登录、扫描、漏洞发现等关键事件实时转发至 Syslog 服务器（支持 UDP / TCP）
+        </div>
+        <div class="form-row" style="align-items:center;margin-bottom:16px">
+          <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#1a1a1a">
+            <label class="toggle">
+              <input type="checkbox" id="syslogEnabled" onchange="saveSyslog()">
+              <span class="toggle-slider"></span>
+            </label>
+            启用 Syslog
+          </label>
+        </div>
+        <div class="form-row col3">
+          <div class="form-group" style="grid-column:span 1">
+            <label>服务器地址</label>
+            <input id="syslogHost" placeholder="192.168.1.100 或 syslog.example.com">
+          </div>
+          <div class="form-group">
+            <label>端口</label>
+            <input id="syslogPort" type="number" value="514" min="1" max="65535">
+          </div>
+          <div class="form-group">
+            <label>协议</label>
+            <select id="syslogProtocol">
+              <option value="udp">UDP</option>
+              <option value="tcp">TCP</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row col2">
+          <div class="form-group">
+            <label>Facility</label>
+            <select id="syslogFacility">
+              <option value="local0">local0</option>
+              <option value="local1">local1</option>
+              <option value="local2">local2</option>
+              <option value="local3">local3</option>
+              <option value="local4">local4</option>
+              <option value="local5">local5</option>
+              <option value="local6">local6</option>
+              <option value="local7">local7</option>
+              <option value="daemon">daemon</option>
+              <option value="auth">auth</option>
+              <option value="user">user</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>应用标识（App Name）</label>
+            <input id="syslogAppName" placeholder="code-audit">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-primary" onclick="saveSyslog()">保存</button>
+          <button class="btn btn-default" onclick="testSyslog()" id="syslogTestBtn">测试连接</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 添加账户弹窗 -->
+<div class="modal-mask" id="accountModal">
+  <div class="modal">
+    <div class="modal-title">添加账户</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>平台</label>
+        <select id="m_platform" onchange="onPlatformChange()">
+          <option value="github">GitHub</option>
+          <option value="gitlab">GitLab</option>
+          <option value="bitbucket">Bitbucket</option>
+          <option value="gitee">Gitee 码云</option>
+          <option value="tgit">腾讯工蜂 TGit</option>
+          <option value="codeup">阿里 Codeup</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>名称（备注）</label>
+        <input id="m_name" placeholder="如：公司 GitHub">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label id="m_token_label">Personal Access Token</label>
+        <input id="m_token" type="password" placeholder="ghp_xxx 或 glpat-xxx">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label id="m_owner_label">用户名 / 组织名（可选，留空则扫描当前账号下所有仓库）</label>
+        <input id="m_owner" placeholder="如：my-org">
+      </div>
+    </div>
+    <div class="form-row" id="m_urlRow" style="display:none">
+      <div class="form-group">
+        <label id="m_url_label">服务器地址</label>
+        <input id="m_url" placeholder="https://gitlab.your-company.com">
+      </div>
+    </div>
+    <div id="testConnResult"></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('accountModal')">取消</button>
+      <button class="btn btn-default" onclick="testAccountConn()" id="testConnBtn">测试连接</button>
+      <button class="btn btn-primary" onclick="addAccount()">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加渠道弹窗 -->
+<div class="modal-mask" id="channelModal">
+  <div class="modal">
+    <div class="modal-title" id="channelModalTitle">添加通知渠道</div>
+    <input type="hidden" id="c_edit_id" value="">
+    <div class="form-row col2">
+      <div class="form-group">
+        <label>渠道名称</label>
+        <input id="c_name" placeholder="如：安全团队钉钉群">
+      </div>
+      <div class="form-group">
+        <label>类型</label>
+        <select id="c_type" onchange="renderChannelForm()">
+          <option value="dingtalk">钉钉</option>
+          <option value="wecom">企业微信</option>
+          <option value="feishu">飞书</option>
+          <option value="slack">Slack</option>
+          <option value="email">邮件</option>
+        </select>
+      </div>
+    </div>
+    <div id="c_fields"></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('channelModal')">取消</button>
+      <button class="btn btn-primary" id="c_submit_btn" onclick="submitChannel()">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加/编辑提示词弹窗 -->
+<div class="modal-mask" id="promptModal">
+  <div class="modal" style="width:700px;max-width:95vw">
+    <div class="modal-title" id="promptModalTitle">添加提示词</div>
+    <input type="hidden" id="pm_id">
+    <div class="form-row col2">
+      <div class="form-group">
+        <label>名称</label>
+        <input id="pm_name" placeholder="如：Java Backend、PHP">
+      </div>
+      <div class="form-group">
+        <label>分类</label>
+        <select id="pm_category">
+          <option value="frontend">前端 Frontend</option>
+          <option value="backend">后端 Backend</option>
+          <option value="contract">合约 Contract</option>
+          <option value="custom">自定义 Custom</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>适用扩展名（逗号分隔，如 <code>.java,.kt</code> 或 <code>Dockerfile</code>）</label>
+        <input id="pm_extensions" placeholder=".java,.kt,.gradle">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>提示词内容</label>
+        <textarea id="pm_content" style="min-height:320px;font-family:monospace;font-size:12px;line-height:1.5" placeholder="提示词模板，使用 {filename} {message} {diff} 占位符"></textarea>
+      </div>
+    </div>
+    <div class="form-row" id="pm_enabledRow" style="align-items:center">
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#1a1a1a">
+        <label class="toggle">
+          <input type="checkbox" id="pm_enabled" checked>
+          <span class="toggle-slider"></span>
+        </label>
+        启用此提示词
+      </label>
+    </div>
+    <div id="pm_err" style="color:#ff4d4f;font-size:13px;min-height:18px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('promptModal')">取消</button>
+      <button class="btn btn-default" id="pm_resetBtn" onclick="resetPrompt()" style="display:none">重置为默认</button>
+      <button class="btn btn-primary" onclick="submitPrompt()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 白名单弹窗 -->
+<div class="modal-mask" id="whitelistModal">
+  <div class="modal" style="width:540px">
+    <div class="modal-title">添加白名单规则</div>
+    <div style="font-size:13px;color:#888;margin-bottom:14px">三个条件同时满足才过滤，留空表示通配（匹配全部）。</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>仓库路径（留空通配）</label>
+        <input id="wl_repo" placeholder="如：org/repo-name">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>文件名（留空通配）</label>
+        <input id="wl_filename" placeholder="如：src/utils.py">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>漏洞标题关键字（留空通配）</label>
+        <input id="wl_title" placeholder="如：Hardcoded Secret">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>原因说明（可选）</label>
+        <input id="wl_reason" placeholder="如：已知误报，内部测试环境">
+      </div>
+    </div>
+    <div id="wl_err" style="color:#ff4d4f;font-size:13px;min-height:18px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('whitelistModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitWhitelist()">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加用户弹窗 -->
+<div class="modal-mask" id="addUserModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-title">添加管理员账户</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>用户名</label>
+        <input id="nu_username" placeholder="至少 2 个字符">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>密码</label>
+        <input id="nu_password" type="password" placeholder="至少 8 位，含大小写字母和数字">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>确认密码</label>
+        <input id="nu_password2" type="password" placeholder="再次输入密码">
+      </div>
+    </div>
+    <div id="nu_err" style="color:#ff4d4f;font-size:13px;min-height:18px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('addUserModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitAddUser()">添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- 修改密码弹窗 -->
+<div class="modal-mask" id="changePwdModal">
+  <div class="modal" style="width:400px">
+    <div class="modal-title">修改密码 — <span id="cp_username_label"></span></div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>新密码</label>
+        <input id="cp_password" type="password" placeholder="至少 8 位，含大小写字母和数字">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>确认新密码</label>
+        <input id="cp_password2" type="password" placeholder="再次输入新密码">
+      </div>
+    </div>
+    <div id="cp_err" style="color:#ff4d4f;font-size:13px;min-height:18px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('changePwdModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitChangePwd()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 漏洞详情弹窗 -->
+<div class="modal-mask" id="findingsModal" onclick="if(event.target===this)closeFindingsModal()">
+  <div class="modal modal-xl">
+    <div class="modal-title" id="findingsTitle">漏洞详情</div>
+    <div id="findings-filter">
+      <button class="sev-tab active" data-sev="all" onclick="filterFindings('all')">全部</button>
+      <button class="sev-tab critical" data-sev="critical" onclick="filterFindings('critical')">严重</button>
+      <button class="sev-tab high" data-sev="high" onclick="filterFindings('high')">高危</button>
+      <button class="sev-tab medium" data-sev="medium" onclick="filterFindings('medium')">中危</button>
+      <button class="sev-tab low" data-sev="low" onclick="filterFindings('low')">低危</button>
+      <span style="color:#e8e8e8;margin:0 4px">|</span>
+      <select id="findings-status-filter" onchange="filterFindingsByStatus()" style="width:auto;min-width:100px;padding:4px 8px;font-size:12px;border-radius:16px">
+        <option value="all">所有状态</option>
+        <option value="new">新增</option>
+        <option value="fixing">修复中</option>
+        <option value="fixed">已修复</option>
+        <option value="wont_fix">暂不处理</option>
+      </select>
+    </div>
+    <div id="findingsList"></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeFindingsModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 扫描日志弹窗 -->
+<div class="modal-mask" id="scanLogsModal" onclick="if(event.target===this)closeScanLogsModal()">
+  <div class="modal modal-xl">
+    <div class="modal-title" id="scanLogsTitle">扫描执行日志</div>
+    <div class="log-container" id="scanLogContent"><span style="color:#888">加载中…</span></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeScanLogsModal()">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 添加仓库负责人弹窗 -->
+<div class="modal-mask" id="repoOwnerModal">
+  <div class="modal" style="width:520px">
+    <div class="modal-title">配置仓库负责人</div>
+    <input type="hidden" id="ro_id">
+    <div class="form-row col2">
+      <div class="form-group">
+        <label>仓库路径（如 owner/repo）</label>
+        <input id="ro_repo" placeholder="my-org/my-repo">
+      </div>
+      <div class="form-group">
+        <label>平台</label>
+        <select id="ro_source">
+          <option value="github">GitHub</option>
+          <option value="gitlab">GitLab</option>
+          <option value="bitbucket">Bitbucket</option>
+          <option value="gitee">Gitee</option>
+          <option value="tgit">TGit</option>
+          <option value="codeup">Codeup</option>
+          <option value="">其他</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row col2">
+      <div class="form-group">
+        <label>负责人姓名</label>
+        <input id="ro_person" placeholder="如：张三">
+      </div>
+      <div class="form-group">
+        <label>联系方式（可选）</label>
+        <input id="ro_contact" placeholder="如：zhangsan@company.com">
+      </div>
+    </div>
+    <div id="ro_err" style="color:#ff4d4f;font-size:13px;min-height:18px"></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('repoOwnerModal')">取消</button>
+      <button class="btn btn-primary" onclick="submitRepoOwner()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+</div><!-- /#app -->
+
+<script>
+const PAGES = ['dashboard','accounts','repoowners','channels','instant','ai','history','stats','prompts','whitelist','users','settings'];
+const PAGE_TITLES = {dashboard:'概览',accounts:'账户配置',repoowners:'仓库负责人',channels:'通知渠道',
+  instant:'即时代码分析',ai:'AI 配置',history:'扫描历史',stats:'漏洞统计',prompts:'提示词管理',
+  whitelist:'误报白名单',users:'账户管理',settings:'系统设置'};
+let currentPage = 'dashboard';
+
+// ── 鉴权 ──────────────────────────────────────────────────────────
+const TOKEN_KEY = 'audit_token';
+function getToken() { return localStorage.getItem(TOKEN_KEY); }
+function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
+function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+
+function showLogin() {
+  document.getElementById('app').style.display = 'none';
+  const loginPage = document.getElementById('login-page');
+  if (!loginPage.classList.contains('show')) {
+    document.getElementById('login-err').textContent = '';
+    document.getElementById('login-user').value = '';
+    document.getElementById('login-pass').value = '';
+    loginPage.classList.add('show');
+  }
+}
+
+function showApp() {
+  document.getElementById('login-page').classList.remove('show');
+  document.getElementById('app').style.display = 'flex';
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-err');
+  if (!username || !password) { errEl.textContent = '请输入用户名和密码'; return; }
+  btn.disabled = true; btn.textContent = '登录中…';
+  errEl.textContent = '';
+  try {
+    const resp = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await resp.json();
+    if (!resp.ok) { errEl.textContent = data.detail || '登录失败'; return; }
+    setToken(data.token);
+    _currentUser = data.username;
+    showApp();
+    loadDashboard();
+    pollStatus();
+  } catch(e) {
+    errEl.textContent = '网络错误，请重试';
+  } finally {
+    btn.disabled = false; btn.textContent = '登 录';
+  }
+}
+
+async function doLogout() {
+  const token = getToken();
+  if (token) {
+    await fetch('/api/logout', {method:'POST', headers:{Authorization:'Bearer '+token}}).catch(()=>{});
+  }
+  clearToken();
+  showLogin();
+}
+
+function nav(page) {
+  currentPage = page;
+  PAGES.forEach(p => {
+    document.getElementById('s-'+p).style.display = p === page ? '' : 'none';
+  });
+  document.querySelectorAll('.nav-item').forEach((el, i) => {
+    el.classList.toggle('active', PAGES[i] === page);
+  });
+  document.getElementById('pageTitle').textContent = PAGE_TITLES[page];
+  loadPage(page);
+}
+
+function loadPage(p) {
+  if (p === 'dashboard')  { loadDashboard(); }
+  if (p === 'accounts')   { loadAccounts(); }
+  if (p === 'repoowners') { loadRepoOwners(); }
+  if (p === 'channels')   { loadChannels(); }
+  if (p === 'ai')         { loadLLM(); }
+  if (p === 'history')    { loadHistory(); }
+  if (p === 'stats')      { initStats(); }
+  if (p === 'prompts')    { loadPrompts(); }
+  if (p === 'whitelist')  { loadWhitelist(); }
+  if (p === 'instant')    { /* no pre-load needed */ }
+  if (p === 'users')      { loadUsers(); }
+  if (p === 'settings')   { loadSettings(); }
+}
+
+// ── API 工具 ──────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  const token = getToken();
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(path, opts);
+  if (resp.status === 401) {
+    clearToken();
+    showLogin();
+    throw new Error('会话已过期，请重新登录');
+  }
+  if (!resp.ok) {
+    const e = await resp.json().catch(() => ({detail: resp.statusText}));
+    throw new Error(e.detail || e.msg || '请求失败');
+  }
+  return resp.json();
+}
+
+function toast(msg, err) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.background = err ? '#ff4d4f' : '#333';
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+function openModal(id)  { document.getElementById(id).classList.add('show'); }
+
+// ── 状态轮询 ──────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const s    = await api('GET', '/api/status');
+    const dot  = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const stopBtn  = document.getElementById('stopBtn');
+    const scanBtn    = document.getElementById('scanBtn');
+    const fsBtn      = document.getElementById('fullScanBtn');
+    const poisonBtn  = document.getElementById('poisonBtn');
+    if (s.scanning) {
+      dot.className = s.paused ? 'status-dot paused' : 'status-dot running';
+      text.textContent = s.paused ? '已暂停' : '扫描中…';
+      pauseBtn.textContent = s.paused ? '继续' : '暂停';
+      pauseBtn.style.display = '';
+      stopBtn.style.display  = '';
+      scanBtn.disabled = true;
+      fsBtn.disabled   = true;
+      if (poisonBtn) poisonBtn.disabled = true;
+    } else {
+      dot.className = 'status-dot idle';
+      text.textContent = '空闲';
+      pauseBtn.style.display = 'none';
+      stopBtn.style.display  = 'none';
+      scanBtn.disabled = false;
+      fsBtn.disabled   = false;
+      if (poisonBtn) poisonBtn.disabled = false;
+    }
+    // 更新 Dashboard 调度信息栏（三类）
+    function _schedSummary(type) {
+      if (!s.schedules) return '—';
+      const active = s.schedules.filter(x => x.type === type && x.enabled);
+      if (!active.length) return '未启用';
+      const labels = active.map(x => {
+        if (x.hour === -1) return `每小时:${String(x.minute).padStart(2,'0')}`;
+        const wd = x.weekday != null ? ['周一','周二','周三','周四','周五','周六','周日'][x.weekday]+'  ' : '';
+        return wd + String(x.hour).padStart(2,'0') + ':' + String(x.minute).padStart(2,'0');
+      });
+      const nextRuns = active.filter(x => x.next_run).map(x => new Date(x.next_run));
+      const nearest  = nextRuns.length ? new Date(Math.min(...nextRuns)) : null;
+      return labels.join('、') + (nearest ? '  下次:' + fmtTime(nearest.toISOString()) : '');
+    }
+    const elPoison = document.getElementById('dash-poison-summary');
+    const elInc    = document.getElementById('dash-inc-summary');
+    const elFull   = document.getElementById('dash-full-summary');
+    if (elPoison) elPoison.textContent = _schedSummary('poison');
+    if (elInc)    elInc.textContent    = _schedSummary('incremental_audit');
+    if (elFull)   elFull.textContent   = _schedSummary('full_audit');
+  } catch(e) {}
+}
+setInterval(pollStatus, 5000);
+pollStatus();
+
+// ── 暂停 / 恢复 / 停止 ────────────────────────────────────────────
+async function pauseResumeScan() {
+  const btn = document.getElementById('pauseBtn');
+  const pausing = btn.textContent === '暂停';
+  try {
+    await api('POST', pausing ? '/api/scan/pause' : '/api/scan/resume');
+    pollStatus();
+  } catch(e) { toast(e.message, true); }
+}
+
+async function stopScan() {
+  if (!confirm('确认停止当前扫描？')) return;
+  try {
+    const r = await api('POST', '/api/scan/stop');
+    toast(r.msg);
+    setTimeout(pollStatus, 1000);
+  } catch(e) { toast(e.message, true); }
+}
+
+async function rerunScan(id) {
+  try {
+    const r = await api('POST', `/api/scans/${id}/rerun`);
+    toast(r.msg);
+    setTimeout(() => loadPage(currentPage), 2000);
+  } catch(e) { toast(e.message, true); }
+}
+
+async function deleteScan(id) {
+  if (!confirm(`确认删除扫描记录 #${id}？此操作不可恢复。`)) return;
+  try {
+    await api('DELETE', `/api/scans/${id}`);
+    toast('扫描记录已删除');
+    loadPage(currentPage);
+  } catch(e) { toast(e.message, true); }
+}
+
+// ── 触发扫描 ──────────────────────────────────────────────────────
+async function triggerScan(scanType) {
+  const _labels = {poison:'投毒检测', incremental_audit:'增量代码审计', full_audit:'全量代码审计'};
+  const label = _labels[scanType] || scanType;
+  if (scanType === 'full_audit' && !confirm('全量代码审计将拉取 main/master 分支所有历史提交，数据量可能较大，耗时较长，确认继续？')) return;
+  const btnId   = {poison:'poisonBtn', incremental_audit:'scanBtn', full_audit:'fullScanBtn'}[scanType];
+  const btn     = document.getElementById(btnId);
+  const scanBtn = document.getElementById('scanBtn');
+  const fsBtn   = document.getElementById('fullScanBtn');
+  const pBtn    = document.getElementById('poisonBtn');
+  if (btn) btn.textContent = '扫描中…';
+  [scanBtn, fsBtn, pBtn].forEach(b => { if (b) b.disabled = true; });
+  try {
+    const res = await api('POST', '/api/scan/trigger', {scan_type: scanType});
+    toast(res.msg || `${label}已启动，请稍后查看历史记录`);
+    setTimeout(() => { loadPage(currentPage); }, 3000);
+  } catch(e) {
+    toast(e.message, true);
+  } finally {
+    if (btn) btn.textContent = label;
+    [scanBtn, fsBtn, pBtn].forEach(b => { if (b) b.disabled = false; });
+    document.getElementById('poisonBtn').textContent = '投毒检测';
+    document.getElementById('scanBtn').textContent   = '增量审计';
+    document.getElementById('fullScanBtn').textContent = '全量审计';
+  }
+}
+
+// ── 概览 ──────────────────────────────────────────────────────────
+async function loadDashboard() {
+  const scans = await api('GET', '/api/scans').catch(() => []);
+  const done  = scans.filter(s => s.status === 'done');
+  const total = done.reduce((a, s) => a + s.total_findings, 0);
+  const crit  = done.reduce((a, s) => a + s.critical_count, 0);
+  const high  = done.reduce((a, s) => a + s.high_count, 0);
+  const med   = done.reduce((a, s) => a + s.medium_count, 0);
+  document.getElementById('st-total').textContent    = total;
+  document.getElementById('st-critical').textContent = crit;
+  document.getElementById('st-high').textContent     = high;
+  document.getElementById('st-medium').textContent   = med;
+  renderScanTable('dashScans', scans.slice(0, 10));
+}
+
+function renderScanTable(id, scans) {
+  const el = document.getElementById(id);
+  if (!scans.length) { el.innerHTML = '<div class="empty">暂无扫描记录</div>'; return; }
+  const STATUS_LABEL    = {done:'完成',running:'进行中',paused:'已暂停',error:'失败',stopped:'已停止'};
+  const SCAN_TYPE_LABEL = {poison:'🛡️ 投毒检测',incremental_audit:'🔍 增量审计',full_audit:'📦 全量审计',
+                           incremental:'🔍 增量审计',full:'📦 全量审计'};
+  el.innerHTML = `<table>
+    <thead><tr><th>时间</th><th>类型</th><th>状态</th><th>提交数</th><th>严重</th><th>高危</th><th>中危</th><th>低危</th><th>操作</th></tr></thead>
+    <tbody>${scans.map(s => `
+      <tr>
+        <td style="color:#888">${fmtTime(s.started_at)}</td>
+        <td style="font-size:12px;white-space:nowrap">${SCAN_TYPE_LABEL[s.scan_type]||s.scan_type||'—'}</td>
+        <td><span class="badge badge-${s.status}">${STATUS_LABEL[s.status]||s.status}</span></td>
+        <td>${s.total_commits}</td>
+        <td style="color:#ff4d4f;font-weight:700">${s.critical_count}</td>
+        <td style="color:#fa8c16;font-weight:700">${s.high_count}</td>
+        <td style="color:#d4b106">${s.medium_count}</td>
+        <td style="color:#52c41a">${s.low_count}</td>
+        <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          ${s.status==='done' && s.total_findings > 0 ? `<button class="btn btn-primary btn-sm" onclick="openFindings(${s.id})">查看漏洞</button>` : ''}
+          ${s.report_path ? `<a href="/reports/${s.report_path.split('/').pop()}" target="_blank"><button class="btn btn-default btn-sm">HTML</button></a>` : ''}
+          ${s.status==='done' && s.total_findings > 0 ? `<button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'json')">JSON</button><button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'markdown')">MD</button>` : ''}
+          <button class="btn btn-default btn-sm" onclick="openScanLogs(${s.id})">日志</button>
+          ${!['running','paused'].includes(s.status) ? `<button class="btn btn-default btn-sm" onclick="rerunScan(${s.id})">重跑</button>` : ''}
+          ${!['running','paused'].includes(s.status) ? `<button class="btn btn-default btn-sm" style="color:#ff4d4f;border-color:#ff4d4f" onclick="deleteScan(${s.id})">删除</button>` : ''}
+        </td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function fmtTime(t) {
+  if (!t) return '-';
+  return new Date(t).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+// ── 漏洞详情 ──────────────────────────────────────────────────────
+let _allFindings = [];
+let _findingsSev = 'all';
+let _findingsStatusFilter = 'all';
+let _repoOwnerMap = {};
+const FINDINGS_PAGE_SIZE = 50;
+let _findingsPage = 0;
+
+const FINDING_STATUS_LABEL = {new:'新增',fixing:'修复中',fixed:'已修复',wont_fix:'暂不处理'};
+const FINDING_STATUS_CLASS = {new:'badge-status-new',fixing:'badge-status-fixing',fixed:'badge-status-fixed',wont_fix:'badge-status-wont_fix'};
+
+async function openFindings(scanId) {
+  document.getElementById('findingsTitle').textContent = `漏洞详情 — 扫描 #${scanId}`;
+  document.getElementById('findingsList').innerHTML = '<div class="empty">加载中…</div>';
+  document.getElementById('findingsModal').classList.add('show');
+  _findingsSev = 'all';
+  _findingsStatusFilter = 'all';
+  _findingsPage = 0;
+  document.querySelectorAll('#findings-filter .sev-tab').forEach(b => b.classList.remove('active'));
+  document.querySelector('#findings-filter [data-sev="all"]').classList.add('active');
+  document.getElementById('findings-status-filter').value = 'all';
+  try {
+    [_allFindings, _repoOwnerMap] = await Promise.all([
+      api('GET', `/api/scans/${scanId}/findings`),
+      api('GET', '/api/repo-owner-map').catch(() => ({}))
+    ]);
+  } catch(e) {
+    document.getElementById('findingsList').innerHTML =
+      `<div class="empty" style="color:#ff4d4f">加载失败: ${esc(e.message)}</div>`;
+    return;
+  }
+  renderFindings();
+}
+
+function closeFindingsModal() {
+  document.getElementById('findingsModal').classList.remove('show');
+}
+
+function filterFindings(sev) {
+  _findingsSev = sev;
+  _findingsPage = 0;
+  document.querySelectorAll('#findings-filter .sev-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.sev === sev);
+  });
+  renderFindings();
+}
+
+function filterFindingsByStatus() {
+  _findingsStatusFilter = document.getElementById('findings-status-filter').value;
+  _findingsPage = 0;
+  renderFindings();
+}
+
+async function updateFindingStatus(id, status) {
+  try {
+    await api('PATCH', `/api/findings/${id}/status`, {status});
+    const f = _allFindings.find(x => x.id === id);
+    if (f) f.status = status;
+    renderFindings();
+    toast('状态已更新');
+  } catch(e) { toast(e.message, true); }
+}
+
+function _renderFindingItem(f) {
+  const SEV_COLOR = {critical:'#ff4d4f',high:'#fa8c16',medium:'#d4b106',low:'#52c41a'};
+  const SEV_LABEL = {critical:'严重',high:'高危',medium:'中危',low:'低危'};
+  const fStatus = f.status || 'new';
+  return `
+  <div class="finding-item" id="fi-${f.id}">
+    <div class="fi-header">
+      <span class="badge" style="background:${SEV_COLOR[f.severity]||'#888'};color:#fff">${SEV_LABEL[f.severity]||f.severity}</span>
+      <span class="badge" style="background:#f5f5f5;color:#666">${f.type==='poisoning'?'🔴 投毒':'🛡️ 漏洞'}</span>
+      <span class="badge ${FINDING_STATUS_CLASS[fStatus]||''}">${FINDING_STATUS_LABEL[fStatus]||fStatus}</span>
+      <strong style="font-size:14px">${esc(f.title)}</strong>
+    </div>
+    <div class="fi-file">📄 ${esc(f.filename)}${f.line?' &nbsp;第 '+esc(f.line)+' 行':''}</div>
+    <div class="fi-desc">${esc(f.description)}</div>
+    ${f.recommendation ? `<div class="fi-rec">${esc(f.recommendation)}</div>` : ''}
+    <div class="fi-commit">
+      commit ${f.commit_url ? `<a href="${esc(f.commit_url)}" target="_blank" style="color:#1677ff">${String(f.commit_sha||'').slice(0,7)||'—'}</a>` : String(f.commit_sha||'').slice(0,7)||'—'}
+      &nbsp;·&nbsp;${esc(f.author)}&nbsp;·&nbsp;${fmtTime(f.committed_at)}
+    </div>
+    <div class="fi-status">
+      <span style="font-size:12px;color:#888">状态:</span>
+      ${['new','fixing','fixed','wont_fix'].map(s =>
+        `<button class="sev-tab btn-sm ${fStatus===s?'active':''}" style="border-radius:12px;padding:2px 10px;font-size:11px"
+          onclick="updateFindingStatus(${f.id},'${s}')">${FINDING_STATUS_LABEL[s]}</button>`
+      ).join('')}
+    </div>
+  </div>`;
+}
+
+function renderFindings() {
+  let list = _findingsSev === 'all' ? _allFindings : _allFindings.filter(f => f.severity === _findingsSev);
+  if (_findingsStatusFilter !== 'all') {
+    list = list.filter(f => (f.status || 'new') === _findingsStatusFilter);
+  }
+  const el = document.getElementById('findingsList');
+  if (!list.length) {
+    el.innerHTML = _allFindings.length === 0
+      ? '<div class="empty">此次扫描未发现漏洞 ✅</div>'
+      : '<div class="empty">当前筛选条件下无漏洞</div>';
+    return;
+  }
+  const start = _findingsPage * FINDINGS_PAGE_SIZE;
+  const page  = list.slice(start, start + FINDINGS_PAGE_SIZE);
+  const total = list.length;
+  const totalPages = Math.ceil(total / FINDINGS_PAGE_SIZE);
+
+  // 按 repo 分组（仅当前页）
+  const groups = {};
+  for (const f of page) {
+    const key = f.repo || '未知仓库';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(f);
+  }
+  const groupHtml = Object.entries(groups).map(([repo, items]) => {
+    const ownerKey = `${repo}|${items[0].source||''}`;
+    const ownerInfo = _repoOwnerMap[ownerKey];
+    const ownerBadge = ownerInfo && ownerInfo.responsible_person
+      ? `<span class="fi-owner-badge">负责人: ${esc(ownerInfo.responsible_person)}${ownerInfo.contact ? ' · ' + esc(ownerInfo.contact) : ''}</span>`
+      : '';
+    return `<div class="fi-group-title">📦 ${esc(repo)} ${ownerBadge}</div>${items.map(_renderFindingItem).join('')}`;
+  }).join('');
+
+  const pageBar = totalPages > 1 ? `
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 0;font-size:13px">
+      <button class="btn btn-default btn-sm" onclick="_findingsPage--;renderFindings()" ${_findingsPage===0?'disabled':''}>上一页</button>
+      <span style="color:#888">第 ${_findingsPage+1} / ${totalPages} 页，共 ${total} 条</span>
+      <button class="btn btn-default btn-sm" onclick="_findingsPage++;renderFindings()" ${_findingsPage>=totalPages-1?'disabled':''}>下一页</button>
+    </div>` : `<div style="font-size:12px;color:#aaa;padding:8px 0;text-align:right">共 ${total} 条</div>`;
+
+  el.innerHTML = groupHtml + pageBar;
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── 账户 ──────────────────────────────────────────────────────────
+async function loadAccounts() {
+  const list = await api('GET', '/api/accounts').catch(() => []);
+  const el = document.getElementById('accountList');
+  if (!list.length) { el.innerHTML = '<div class="empty">暂无账户，点击右上角添加</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>平台</th><th>名称</th><th>Token</th><th>Owner</th><th>操作</th></tr></thead>
+    <tbody>${list.map(a => `
+      <tr>
+        <td><span class="badge badge-${a.platform}">${{github:'GitHub',gitlab:'GitLab',bitbucket:'Bitbucket',gitee:'Gitee',tgit:'TGit',codeup:'Codeup'}[a.platform]||a.platform}</span></td>
+        <td>${esc(a.name)}</td>
+        <td style="font-family:monospace;color:#888">${a.token_masked}</td>
+        <td>${esc(a.owner||'-')}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="delAccount(${a.id})">删除</button></td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+const PLATFORM_META = {
+  github:    { token: 'Personal Access Token',              tokenHint: 'ghp_xxx',
+               owner: '用户名 / 组织名（可选）',            ownerHint: '如：my-org',
+               url: false },
+  gitlab:    { token: 'Personal Access Token',              tokenHint: 'glpat-xxx',
+               owner: '用户名 / 组织名（可选）',            ownerHint: '如：my-group',
+               url: true,  urlLabel: '服务器地址（私有部署填写，否则留空）',
+               urlHint: 'https://gitlab.your-company.com',  urlDefault: '' },
+  bitbucket: { token: 'Access Token 或 用户名:应用密码',    tokenHint: 'Bearer Token 或 username:app_password',
+               owner: 'Workspace（必填）',                  ownerHint: '如：my-workspace',
+               url: false },
+  gitee:     { token: 'Personal Access Token',              tokenHint: 'Gitee 私人令牌',
+               owner: '用户名 / 组织名（可选）',            ownerHint: '如：my-gitee-user',
+               url: false },
+  tgit:      { token: 'Personal Access Token',              tokenHint: 'TGit 私有令牌',
+               owner: '用户名 / 组织名（可选）',            ownerHint: '如：my-group',
+               url: true,  urlLabel: '服务器地址',
+               urlHint: 'https://git.code.tencent.com',     urlDefault: 'https://git.code.tencent.com' },
+  codeup:    { token: 'Personal Access Token',              tokenHint: 'Codeup 私有令牌',
+               owner: '用户名 / 组织名（可选）',            ownerHint: '如：my-org',
+               url: true,  urlLabel: '服务器地址',
+               urlHint: 'https://codeup.aliyun.com',        urlDefault: 'https://codeup.aliyun.com' },
+};
+
+function onPlatformChange() {
+  const p   = document.getElementById('m_platform').value;
+  const meta = PLATFORM_META[p] || PLATFORM_META.gitlab;
+  document.getElementById('m_token_label').textContent = meta.token;
+  document.getElementById('m_token').placeholder       = meta.tokenHint;
+  document.getElementById('m_owner_label').textContent = meta.owner;
+  document.getElementById('m_owner').placeholder       = meta.ownerHint;
+  const urlRow = document.getElementById('m_urlRow');
+  if (meta.url) {
+    urlRow.style.display = '';
+    document.getElementById('m_url_label').textContent = meta.urlLabel;
+    document.getElementById('m_url').placeholder       = meta.urlHint;
+    if (meta.urlDefault && !document.getElementById('m_url').value) {
+      document.getElementById('m_url').value = meta.urlDefault;
+    }
+  } else {
+    urlRow.style.display = 'none';
+    document.getElementById('m_url').value = '';
+  }
+}
+
+async function testAccountConn() {
+  const platform = document.getElementById('m_platform').value;
+  const token    = document.getElementById('m_token').value.trim();
+  const url      = document.getElementById('m_url').value.trim();
+  const btn      = document.getElementById('testConnBtn');
+  const res      = document.getElementById('testConnResult');
+  if (!token) { toast('请先填写 Token', true); return; }
+  btn.disabled = true; btn.textContent = '测试中…';
+  res.style.display = 'none';
+  try {
+    const data = await api('POST', '/api/accounts/test', {platform, token, url});
+    res.className = 'ok'; res.textContent = data.msg || '连接成功';
+  } catch(e) {
+    res.className = 'err'; res.textContent = e.message;
+  } finally {
+    res.style.display = 'block';
+    btn.disabled = false; btn.textContent = '测试连接';
+  }
+}
+
+async function addAccount() {
+  const platform = document.getElementById('m_platform').value;
+  const name     = document.getElementById('m_name').value.trim();
+  const token    = document.getElementById('m_token').value.trim();
+  const owner    = document.getElementById('m_owner').value.trim();
+  const url      = document.getElementById('m_url').value.trim();
+  if (!name || !token) { toast('名称和 Token 不能为空', true); return; }
+  await api('POST', '/api/accounts', {platform, name, token, owner, url});
+  toast('账户添加成功');
+  closeModal('accountModal');
+  loadAccounts();
+  ['m_name','m_token','m_owner','m_url'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('testConnResult').style.display = 'none';
+}
+
+function showAddAccount() {
+  onPlatformChange();
+  document.getElementById('testConnResult').style.display = 'none';
+  openModal('accountModal');
+}
+
+async function delAccount(id) {
+  if (!confirm('确定删除？')) return;
+  await api('DELETE', `/api/accounts/${id}`);
+  toast('已删除'); loadAccounts();
+}
+
+// ── 扫描执行日志 ──────────────────────────────────────────────────
+async function openScanLogs(scanId) {
+  document.getElementById('scanLogsTitle').textContent = `扫描执行日志 — #${scanId}`;
+  document.getElementById('scanLogContent').innerHTML = '<span style="color:#888">加载中…</span>';
+  document.getElementById('scanLogsModal').classList.add('show');
+  try {
+    const logs = await api('GET', `/api/scans/${scanId}/logs`);
+    const el = document.getElementById('scanLogContent');
+    if (!logs.length) {
+      el.innerHTML = '<span style="color:#888">暂无日志记录（该扫描在日志功能上线前执行）</span>';
+      return;
+    }
+    el.innerHTML = logs.map(l => {
+      const cls = l.level === 'error' ? 'error' : l.level === 'warning' ? 'warning' : 'info';
+      const time = l.logged_at ? l.logged_at.slice(11,19) : '';
+      return `<div class="log-line ${cls}"><span style="color:#555;margin-right:8px">${time}</span>${esc(l.message)}</div>`;
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  } catch(e) {
+    document.getElementById('scanLogContent').innerHTML = `<span style="color:#ff6b6b">加载失败: ${esc(e.message)}</span>`;
+  }
+}
+
+function closeScanLogsModal() {
+  document.getElementById('scanLogsModal').classList.remove('show');
+}
+
+// ── 仓库负责人 ────────────────────────────────────────────────────
+async function loadRepoOwners() {
+  const list = await api('GET', '/api/repo-owners').catch(() => []);
+  const el = document.getElementById('repoOwnerList');
+  if (!list.length) { el.innerHTML = '<div class="empty">暂无配置，点击右上角添加</div>'; return; }
+  const SOURCE_LABEL = {github:'GitHub',gitlab:'GitLab',bitbucket:'Bitbucket',gitee:'Gitee',tgit:'TGit',codeup:'Codeup'};
+  el.innerHTML = `<table>
+    <thead><tr><th>仓库</th><th>平台</th><th>负责人</th><th>联系方式</th><th>操作</th></tr></thead>
+    <tbody>${list.map(r => `
+      <tr>
+        <td style="font-family:monospace">${esc(r.repo)}</td>
+        <td>${r.source ? `<span class="badge badge-${r.source}">${SOURCE_LABEL[r.source]||r.source}</span>` : '-'}</td>
+        <td style="font-weight:600">${esc(r.responsible_person||'-')}</td>
+        <td style="color:#888">${esc(r.contact||'-')}</td>
+        <td style="display:flex;gap:6px">
+          <button class="btn btn-default btn-sm" onclick="showEditRepoOwner(${r.id},'${esc(r.repo)}','${r.source||''}','${esc(r.responsible_person||'')}','${esc(r.contact||'')}')">编辑</button>
+          <button class="btn btn-danger btn-sm" onclick="delRepoOwner(${r.id})">删除</button>
+        </td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function showAddRepoOwner() {
+  ['ro_id','ro_repo','ro_person','ro_contact'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ro_source').value = 'github';
+  document.getElementById('ro_err').textContent = '';
+  openModal('repoOwnerModal');
+}
+
+function showEditRepoOwner(id, repo, source, person, contact) {
+  document.getElementById('ro_id').value     = id;
+  document.getElementById('ro_repo').value   = repo;
+  document.getElementById('ro_source').value = source || 'github';
+  document.getElementById('ro_person').value = person;
+  document.getElementById('ro_contact').value = contact;
+  document.getElementById('ro_err').textContent = '';
+  openModal('repoOwnerModal');
+}
+
+async function submitRepoOwner() {
+  const repo   = document.getElementById('ro_repo').value.trim();
+  const source = document.getElementById('ro_source').value;
+  const person = document.getElementById('ro_person').value.trim();
+  const contact = document.getElementById('ro_contact').value.trim();
+  const errEl = document.getElementById('ro_err');
+  if (!repo) { errEl.textContent = '仓库路径不能为空'; return; }
+  errEl.textContent = '';
+  try {
+    await api('POST', '/api/repo-owners', {repo, source, responsible_person: person, contact});
+    toast('保存成功');
+    closeModal('repoOwnerModal');
+    loadRepoOwners();
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+async function delRepoOwner(id) {
+  if (!confirm('确定删除此映射？')) return;
+  await api('DELETE', `/api/repo-owners/${id}`);
+  toast('已删除'); loadRepoOwners();
+}
+
+// ── 通知渠道 ──────────────────────────────────────────────────────
+const CHANNEL_FIELDS = {
+  dingtalk: [
+    {id:'webhook', label:'Webhook URL', placeholder:'https://oapi.dingtalk.com/robot/send?access_token=xxx'},
+    {id:'secret',  label:'加签密钥（可选，安全设置→加签）', placeholder:'SEC...'},
+    {id:'keyword', label:'自定义关键词（可选，安全设置→关键词）', placeholder:'如：安全扫描'},
+  ],
+  wecom: [
+    {id:'webhook', label:'Webhook URL', placeholder:'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'},
+  ],
+  feishu: [
+    {id:'webhook', label:'Webhook URL', placeholder:'https://open.feishu.cn/open-apis/bot/v2/hook/xxx'},
+    {id:'secret',  label:'签名校验密钥（可选，安全设置→签名校验）', placeholder:'飞书机器人签名密钥'},
+    {id:'keyword', label:'自定义关键词（可选，安全设置→关键词）', placeholder:'如：安全扫描'},
+  ],
+  slack: [
+    {id:'webhook', label:'Webhook URL', placeholder:'https://hooks.slack.com/services/xxx'},
+  ],
+  email: [
+    {id:'smtp_host', label:'SMTP 服务器', placeholder:'smtp.qq.com'},
+    {id:'smtp_port', label:'端口',        placeholder:'465'},
+    {id:'smtp_user', label:'邮箱账号',    placeholder:'your@qq.com'},
+    {id:'smtp_pass', label:'授权码/密码', placeholder:'', type:'password'},
+    {id:'email_to',  label:'收件人（逗号分隔）', placeholder:'a@x.com,b@x.com'},
+  ],
+};
+
+function renderChannelForm() {
+  const type   = document.getElementById('c_type').value;
+  const fields = CHANNEL_FIELDS[type] || [];
+  document.getElementById('c_fields').innerHTML = fields.map(f => `
+    <div class="form-row" style="margin-bottom:0">
+      <div class="form-group">
+        <label>${f.label}</label>
+        <input id="cf_${f.id}" type="${f.type||'text'}" placeholder="${f.placeholder||''}">
+      </div>
+    </div>`).join('');
+}
+
+function showAddChannel() {
+  document.getElementById('channelModalTitle').textContent = '添加通知渠道';
+  document.getElementById('c_submit_btn').textContent = '添加';
+  document.getElementById('c_edit_id').value = '';
+  document.getElementById('c_name').value = '';
+  document.getElementById('c_type').value = 'dingtalk';
+  document.getElementById('c_type').disabled = false;
+  renderChannelForm();
+  openModal('channelModal');
+}
+
+function showEditChannel(ch) {
+  document.getElementById('channelModalTitle').textContent = '编辑通知渠道';
+  document.getElementById('c_submit_btn').textContent = '保存';
+  document.getElementById('c_edit_id').value = ch.id;
+  document.getElementById('c_name').value    = ch.name;
+  document.getElementById('c_type').value    = ch.type;
+  document.getElementById('c_type').disabled = true;  // 编辑时不允许改类型
+  renderChannelForm();
+  // 填充现有配置
+  const cfg = typeof ch.config === 'string' ? JSON.parse(ch.config) : (ch.config || {});
+  (CHANNEL_FIELDS[ch.type]||[]).forEach(f => {
+    const el = document.getElementById('cf_'+f.id);
+    if (el && cfg[f.id]) el.value = cfg[f.id];
+  });
+  openModal('channelModal');
+}
+
+async function submitChannel() {
+  const name   = document.getElementById('c_name').value.trim();
+  const type   = document.getElementById('c_type').value;
+  const editId = document.getElementById('c_edit_id').value;
+  if (!name) { toast('请填写渠道名称', true); return; }
+  const config = {};
+  (CHANNEL_FIELDS[type]||[]).forEach(f => {
+    config[f.id] = document.getElementById('cf_'+f.id)?.value.trim() || '';
+  });
+  if (editId) {
+    await api('PUT', `/api/channels/${editId}`, {name, config});
+    toast('渠道已更新');
+  } else {
+    await api('POST', '/api/channels', {name, type, config});
+    toast('渠道添加成功');
+  }
+  closeModal('channelModal');
+  document.getElementById('c_type').disabled = false;
+  loadChannels();
+}
+
+// 将渠道列表缓存，供编辑弹窗读取 config
+let _channelList = [];
+
+async function loadChannels() {
+  const list = await api('GET', '/api/channels').catch(() => []);
+  _channelList = list;
+  const el = document.getElementById('channelList');
+  const TYPE_LABEL = {dingtalk:'钉钉',wecom:'企业微信',feishu:'飞书',slack:'Slack',email:'邮件'};
+  if (!list.length) { el.innerHTML = '<div class="empty">暂无渠道，点击右上角添加</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>名称</th><th>类型</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>${list.map(c => `
+      <tr>
+        <td>${esc(c.name)}</td>
+        <td>${TYPE_LABEL[c.type]||c.type}</td>
+        <td><label class="toggle"><input type="checkbox" ${c.enabled?'checked':''} onchange="toggleChannel(${c.id},this.checked)"><span class="toggle-slider"></span></label></td>
+        <td style="display:flex;gap:6px">
+          <button class="btn btn-default btn-sm" onclick="testChannel(${c.id},this)">测试</button>
+          <button class="btn btn-default btn-sm" onclick="editChannel(${c.id})">编辑</button>
+          <button class="btn btn-danger btn-sm" onclick="delChannel(${c.id})">删除</button>
+        </td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function editChannel(id) {
+  const ch = _channelList.find(c => c.id === id);
+  if (!ch) return;
+  showEditChannel(ch);
+}
+
+async function toggleChannel(id, enabled) {
+  await api('PATCH', `/api/channels/${id}`, {enabled});
+}
+
+async function delChannel(id) {
+  if (!confirm('确定删除？')) return;
+  await api('DELETE', `/api/channels/${id}`);
+  toast('已删除'); loadChannels();
+}
+
+// ── AI 配置 ──────────────────────────────────────────────────────
+const PROVIDER_HINTS = {
+  deepseek:   '默认模型：deepseek-chat。',
+  qwen:       '默认模型：qwen-max。API Key 在阿里云 DashScope 控制台获取。',
+  zhipu:      '默认模型：glm-4-plus。API Key 在智谱开放平台获取。',
+  moonshot:   '默认模型：moonshot-v1-32k。',
+  doubao:     '默认模型：doubao-pro-32k。在火山引擎获取 API Key。',
+  minimax:    '默认模型：abab6.5s-chat。',
+  baidu:      '默认模型：ernie-4.5。在百度千帆平台获取 API Key。',
+  gemini:     '默认模型：gemini-2.0-flash。在 Google AI Studio 获取 API Key。',
+  openai:     '默认模型：gpt-4o。',
+  anthropic:  '默认模型：claude-opus-4-6。使用 Anthropic SDK。',
+  openrouter: '默认模型：deepseek/deepseek-chat。通过 OpenRouter 访问多种模型。',
+  ollama:     '默认模型：llama3.2。需本地运行 Ollama，Base URL 填写服务地址。',
+};
+const PROVIDER_MODELS = {
+  deepseek:   ['deepseek-chat','deepseek-reasoner'],
+  qwen:       ['qwen-max','qwen-plus','qwen-turbo','qwen-long'],
+  zhipu:      ['glm-4-plus','glm-4','glm-4-air','glm-4-flash'],
+  moonshot:   ['moonshot-v1-8k','moonshot-v1-32k','moonshot-v1-128k'],
+  doubao:     ['doubao-pro-32k','doubao-pro-4k','doubao-lite-32k'],
+  minimax:    ['abab6.5s-chat','abab6.5-chat'],
+  baidu:      ['ernie-4.5','ernie-4.0','ernie-3.5'],
+  gemini:     ['gemini-2.0-flash','gemini-1.5-pro','gemini-1.5-flash'],
+  openai:     ['gpt-4o','gpt-4o-mini','o3-mini','o1'],
+  anthropic:  ['claude-opus-4-6','claude-sonnet-4-6','claude-haiku-4-5-20251001'],
+  openrouter: ['deepseek/deepseek-chat','anthropic/claude-3.5-sonnet','google/gemini-2.0-flash-001'],
+  ollama:     ['llama3.2','llama3.1','qwen2.5','deepseek-r1','codellama'],
+};
+
+function onProviderChange() {
+  const p = document.getElementById('llmProvider').value;
+  document.getElementById('llmProviderHint').textContent = PROVIDER_HINTS[p] || '';
+  const modelEl = document.getElementById('llmModel');
+  let dl = document.getElementById('llmModelList');
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'llmModelList'; document.body.appendChild(dl); }
+  dl.innerHTML = (PROVIDER_MODELS[p] || []).map(m => `<option value="${m}">`).join('');
+  modelEl.setAttribute('list', 'llmModelList');
+}
+
+async function loadLLM() {
+  const cfg = await api('GET', '/api/llm-config').catch(() => ({}));
+  if (cfg.provider) { document.getElementById('llmProvider').value = cfg.provider; onProviderChange(); }
+  if (cfg.model)    document.getElementById('llmModel').value = cfg.model;
+  if (cfg.base_url) document.getElementById('llmBaseUrl').value = cfg.base_url;
+  const info = document.getElementById('llmSavedInfo');
+  info.textContent = cfg.api_key && cfg.api_key !== '****' ? `当前 Key: ${cfg.api_key}` :
+                     (cfg.provider ? '已配置 API Key' : '');
+  // 旧版
+  document.getElementById('deepseekKey').placeholder  = cfg.deepseek_api_key  || '未配置';
+  document.getElementById('anthropicKey').placeholder = cfg.anthropic_api_key || '未配置';
+}
+
+async function saveLLM() {
+  const provider = document.getElementById('llmProvider').value;
+  const model    = document.getElementById('llmModel').value.trim();
+  const apiKey   = document.getElementById('llmApiKey').value.trim();
+  const baseUrl  = document.getElementById('llmBaseUrl').value.trim();
+  if (!provider) { toast('请选择提供商', true); return; }
+  await api('POST', '/api/llm-config', {provider, model, api_key: apiKey, base_url: baseUrl});
+  toast('配置已保存');
+  document.getElementById('llmApiKey').value = '';
+  loadLLM();
+}
+
+async function saveLegacyLLM() {
+  const dk = document.getElementById('deepseekKey').value.trim();
+  const ak = document.getElementById('anthropicKey').value.trim();
+  await api('POST', '/api/llm-config', {deepseek_api_key: dk, anthropic_api_key: ak});
+  toast('旧版 Key 已保存');
+  document.getElementById('deepseekKey').value  = '';
+  document.getElementById('anthropicKey').value = '';
+  loadLLM();
+}
+
+// ── 扫描历史 ──────────────────────────────────────────────────────
+async function loadHistory() {
+  const scans = await api('GET', '/api/scans').catch(() => []);
+  renderScanTable('historyList', scans);
+}
+
+// ── 报告导出 ──────────────────────────────────────────────────────
+function exportScan(id, fmt) {
+  const token = getToken();
+  const url = `/api/scans/${id}/export?format=${fmt}`;
+  // 构造带 Auth 的临时下载
+  fetch(url, {headers:{'Authorization':'Bearer '+token}})
+    .then(r => {
+      if (!r.ok) throw new Error('导出失败');
+      return r.blob();
+    })
+    .then(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `scan_${id}.${fmt === 'markdown' ? 'md' : 'json'}`;
+      a.click();
+    })
+    .catch(e => toast(e.message, true));
+}
+
+// ── 通知渠道测试 ──────────────────────────────────────────────────
+async function testChannel(id, btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '发送中…';
+  try {
+    const r = await api('POST', `/api/channels/${id}/test`);
+    toast(r.msg || '测试消息已发送');
+  } catch(e) { toast(e.message, true); }
+  finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+// ── 误报白名单 ────────────────────────────────────────────────────
+async function loadWhitelist() {
+  const list = await api('GET', '/api/whitelist').catch(() => []);
+  const el = document.getElementById('whitelistTable');
+  if (!list.length) { el.innerHTML = '<div class="empty">暂无白名单规则</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>仓库</th><th>文件名</th><th>漏洞标题</th><th>原因</th><th>添加人</th><th>操作</th></tr></thead>
+    <tbody>${list.map(w => `
+      <tr>
+        <td style="font-family:monospace">${esc(w.repo||'*')}</td>
+        <td style="font-family:monospace">${esc(w.filename||'*')}</td>
+        <td>${esc(w.title||'*')}</td>
+        <td style="color:#888">${esc(w.reason||'-')}</td>
+        <td style="color:#888">${esc(w.created_by||'-')}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="delWhitelist(${w.id})">删除</button></td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function showAddWhitelist() {
+  ['wl_repo','wl_filename','wl_title','wl_reason'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('wl_err').textContent = '';
+  openModal('whitelistModal');
+}
+
+async function submitWhitelist() {
+  const repo     = document.getElementById('wl_repo').value.trim();
+  const filename = document.getElementById('wl_filename').value.trim();
+  const title    = document.getElementById('wl_title').value.trim();
+  const reason   = document.getElementById('wl_reason').value.trim();
+  const errEl    = document.getElementById('wl_err');
+  if (!repo && !filename && !title) { errEl.textContent = '至少填写一个匹配条件'; return; }
+  errEl.textContent = '';
+  try {
+    await api('POST', '/api/whitelist', {repo, filename, title, reason});
+    toast('白名单规则已添加');
+    closeModal('whitelistModal');
+    loadWhitelist();
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+async function delWhitelist(id) {
+  if (!confirm('确定删除此白名单规则？')) return;
+  await api('DELETE', `/api/whitelist/${id}`);
+  toast('已删除'); loadWhitelist();
+}
+
+// ── 即时分析 ──────────────────────────────────────────────────────
+const SEVERITY_COLOR_MAP = {critical:'#ff4d4f',high:'#fa8c16',medium:'#d4b106',low:'#52c41a'};
+const SEVERITY_ZH_MAP    = {critical:'严重',high:'高危',medium:'中危',low:'低危'};
+
+let _iaMode = 'paste';  // 'paste' | 'upload'
+let _iaFiles = [];      // 已选择的 File 对象
+
+function iaTab(mode) {
+  _iaMode = mode;
+  document.getElementById('ia_panel_paste').style.display  = mode === 'paste'  ? '' : 'none';
+  document.getElementById('ia_panel_upload').style.display = mode === 'upload' ? '' : 'none';
+  const tabPaste  = document.getElementById('ia_tab_paste');
+  const tabUpload = document.getElementById('ia_tab_upload');
+  tabPaste.style.color        = mode === 'paste'  ? '#1677ff' : '#888';
+  tabPaste.style.borderBottomColor  = mode === 'paste'  ? '#1677ff' : 'transparent';
+  tabUpload.style.color       = mode === 'upload' ? '#1677ff' : '#888';
+  tabUpload.style.borderBottomColor = mode === 'upload' ? '#1677ff' : 'transparent';
+  document.getElementById('ia_result').style.display = 'none';
+}
+
+// 文件选择辅助函数
+function iaPickFiles() {
+  const inp = document.getElementById('ia_file_input');
+  inp.removeAttribute('webkitdirectory');
+  inp.removeAttribute('directory');
+  inp.accept = '*/*';
+  inp.click();
+}
+function iaPickFolder() {
+  const inp = document.getElementById('ia_file_input');
+  inp.setAttribute('webkitdirectory', '');
+  inp.setAttribute('directory', '');
+  inp.accept = '*/*';
+  inp.click();
+}
+function iaPickZip() {
+  const inp = document.getElementById('ia_file_input');
+  inp.removeAttribute('webkitdirectory');
+  inp.removeAttribute('directory');
+  inp.accept = '.zip';
+  inp.click();
+}
+
+function iaFileSelected(event) {
+  _iaFiles = Array.from(event.target.files);
+  iaShowFileList();
+  event.target.value = '';  // 允许重复选择同一文件
+}
+
+function iaDragOver(event) {
+  event.preventDefault();
+  document.getElementById('ia_dropzone').style.borderColor = '#1677ff';
+  document.getElementById('ia_dropzone').style.background  = '#e6f4ff';
+}
+function iaDragLeave() {
+  document.getElementById('ia_dropzone').style.borderColor = '#d9d9d9';
+  document.getElementById('ia_dropzone').style.background  = '#fafafa';
+}
+function iaDrop(event) {
+  event.preventDefault();
+  iaDragLeave();
+  const dt = event.dataTransfer;
+  if (dt.items) {
+    const files = [];
+    for (const item of dt.items) {
+      if (item.kind === 'file') files.push(item.getAsFile());
+    }
+    _iaFiles = files.filter(Boolean);
+  } else {
+    _iaFiles = Array.from(dt.files);
+  }
+  iaShowFileList();
+}
+
+function iaShowFileList() {
+  const listEl   = document.getElementById('ia_file_list');
+  const countEl  = document.getElementById('ia_file_count');
+  const namesEl  = document.getElementById('ia_file_names');
+  const clearBtn = document.getElementById('iaClearBtn');
+  if (!_iaFiles.length) { listEl.style.display = 'none'; clearBtn.style.display = 'none'; return; }
+  listEl.style.display  = '';
+  clearBtn.style.display = '';
+  countEl.textContent = `已选择 ${_iaFiles.length} 个文件`;
+  namesEl.innerHTML = _iaFiles.map(f => `<div>📄 ${esc(f.name || f.webkitRelativePath || '未知')}</div>`).join('');
+}
+
+function iaClearFiles() {
+  _iaFiles = [];
+  iaShowFileList();
+  document.getElementById('ia_result').style.display = 'none';
+  document.getElementById('iaUploadStatus').textContent = '';
+}
+
+async function runInstantAnalysis() {
+  const filename = document.getElementById('ia_filename').value.trim() || 'snippet.py';
+  const code     = document.getElementById('ia_code').value.trim();
+  const language = document.getElementById('ia_lang').value.trim();
+  if (!code) { toast('请输入代码内容', true); return; }
+  const btn    = document.getElementById('iaBtn');
+  const status = document.getElementById('iaStatus');
+  btn.disabled = true; btn.textContent = '分析中…';
+  status.textContent = '正在调用 LLM，请稍候…';
+  document.getElementById('ia_result').style.display = 'none';
+  try {
+    const r = await api('POST', '/api/analyze/instant', {filename, code, language});
+    status.textContent = `分析完成，发现 ${r.findings.length} 个问题`;
+    renderInstantFindings(filename, r.findings, r.summary);
+  } catch(e) {
+    status.textContent = '';
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 开始分析';
+  }
+}
+
+async function runInstantUpload() {
+  if (!_iaFiles.length) { toast('请先选择文件', true); return; }
+  const btn    = document.getElementById('iaUploadBtn');
+  const status = document.getElementById('iaUploadStatus');
+  btn.disabled = true; btn.textContent = '分析中…';
+  status.textContent = `正在上传 ${_iaFiles.length} 个文件，请稍候…`;
+  document.getElementById('ia_result').style.display = 'none';
+
+  const fd = new FormData();
+  for (const f of _iaFiles) fd.append('files', f, f.webkitRelativePath || f.name);
+
+  try {
+    const token = localStorage.getItem('token');
+    const resp  = await fetch('/api/analyze/instant-upload', {
+      method: 'POST',
+      headers: token ? {'Authorization': 'Bearer ' + token} : {},
+      body: fd,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({detail: resp.statusText}));
+      throw new Error(err.detail || resp.statusText);
+    }
+    const r = await resp.json();
+    status.textContent = `分析完成，共 ${r.files.length} 个文件，发现 ${r.total_findings} 个问题`;
+    renderInstantUploadResults(r.files);
+  } catch(e) {
+    status.textContent = '';
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 开始分析';
+  }
+}
+
+function renderInstantUploadResults(files) {
+  const resEl = document.getElementById('ia_result');
+  const title = document.getElementById('ia_result_title');
+  const el    = document.getElementById('ia_findings');
+  resEl.style.display = '';
+
+  const totalFindings = files.reduce((s, f) => s + f.findings.length, 0);
+  title.textContent = `分析结果 — ${files.length} 个文件，共发现 ${totalFindings} 个问题`;
+
+  const parts = [];
+  for (const file of files) {
+    parts.push(`<div style="font-size:13px;font-weight:700;color:#333;padding:10px 0 4px;border-top:1px solid #f0f0f0;margin-top:8px">
+      📄 ${esc(file.filename)}
+      ${file.error ? `<span style="color:#ff4d4f;font-size:12px;margin-left:8px">${esc(file.summary)}</span>` : ''}
+    </div>`);
+    if (!file.error && !file.findings.length) {
+      parts.push(`<div style="color:#52c41a;font-size:12px;padding:4px 0">✅ 未发现安全问题。${file.summary ? esc(file.summary) : ''}</div>`);
+      continue;
+    }
+    const order = {critical:0,high:1,medium:2,low:3};
+    file.findings.sort((a,b) => (order[a.severity]||3)-(order[b.severity]||3));
+    for (const f of file.findings) {
+      parts.push(`
+        <div class="finding-item">
+          <div class="fi-header">
+            <span class="severity-badge" style="background:${SEVERITY_COLOR_MAP[f.severity]||'#888'};color:#fff;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700">${SEVERITY_ZH_MAP[f.severity]||f.severity}</span>
+            <span style="font-size:11px;background:#f5f5f5;color:#666;padding:2px 8px;border-radius:4px">${f.type==='poisoning'?'🔴 投毒':'🛡️ 漏洞'}</span>
+            <span style="font-size:14px;font-weight:600">${esc(f.title||'')}</span>
+          </div>
+          <div class="fi-file">📄 ${esc(f.filename||file.filename)}${f.line ? '  第 '+esc(String(f.line))+' 行' : ''}</div>
+          <div class="fi-desc">${esc(f.description||'')}</div>
+          ${f.recommendation ? `<div class="fi-rec">${esc(f.recommendation)}</div>` : ''}
+        </div>`);
+    }
+  }
+  el.innerHTML = parts.join('');
+}
+
+function renderInstantFindings(filename, findings, summary) {
+  const resEl = document.getElementById('ia_result');
+  const title = document.getElementById('ia_result_title');
+  const el    = document.getElementById('ia_findings');
+  resEl.style.display = '';
+  const counts = {critical:0,high:0,medium:0,low:0};
+  findings.forEach(f => { counts[f.severity] = (counts[f.severity]||0)+1; });
+  title.textContent = `分析结果 — ${filename}：发现 ${findings.length} 个问题`;
+  if (!findings.length) {
+    el.innerHTML = '<div style="color:#52c41a;padding:16px 0">✅ 未发现安全问题。' + (summary ? esc(summary) : '') + '</div>';
+    return;
+  }
+  // Sort by severity
+  const order = {critical:0,high:1,medium:2,low:3};
+  findings.sort((a,b) => (order[a.severity]||3)-(order[b.severity]||3));
+  el.innerHTML = [
+    `<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">`,
+    ...Object.entries(counts).filter(([,v])=>v).map(([sev,cnt])=>
+      `<span style="background:#f5f5f5;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:600;color:${SEVERITY_COLOR_MAP[sev]}">${SEVERITY_ZH_MAP[sev]} ${cnt}</span>`
+    ),
+    `</div>`,
+    ...findings.map((f,i) => `
+      <div class="finding-item">
+        <div class="fi-header">
+          <span class="severity-badge" style="background:${SEVERITY_COLOR_MAP[f.severity]||'#888'};color:#fff;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:700">${SEVERITY_ZH_MAP[f.severity]||f.severity}</span>
+          <span style="font-size:11px;background:#f5f5f5;color:#666;padding:2px 8px;border-radius:4px">${f.type==='poisoning'?'🔴 投毒':'🛡️ 漏洞'}</span>
+          <span style="font-size:14px;font-weight:600">${esc(f.title||'')}</span>
+        </div>
+        <div class="fi-file">📄 ${esc(f.filename||filename)}${f.line ? '  第 '+esc(String(f.line))+' 行' : ''}</div>
+        <div class="fi-desc">${esc(f.description||'')}</div>
+        ${f.recommendation ? `<div class="fi-rec">${esc(f.recommendation)}</div>` : ''}
+      </div>`)
+  ].join('');
+}
+
+// ── 设置 ──────────────────────────────────────────────────────────
+
+async function saveSettings() {
+  const body = {
+    max_diff_chars: document.getElementById('maxDiff').value,
+  };
+  await api('POST', '/api/settings', body);
+  toast('设置已保存');
+}
+
+// ── 扫描时间点管理（三类）────────────────────────────────────────
+const _SCHED_DAYS = ['周一','周二','周三','周四','周五','周六','周日'];
+
+function _schedTimeLabel(s) {
+  if (s.hour === -1) return `每小时:${String(s.minute).padStart(2,'0')}`;
+  const wd = s.weekday != null ? _SCHED_DAYS[s.weekday] + ' ' : '每天 ';
+  return wd + String(s.hour).padStart(2,'0') + ':' + String(s.minute).padStart(2,'0');
+}
+
+async function loadScheduleList() {
+  const all = await api('GET', '/api/scan-schedules').catch(() => []);
+  for (const type of ['poison','incremental_audit','full_audit']) {
+    const el = document.getElementById(`scheduleList-${type}`);
+    if (!el) continue;
+    const list = all.filter(s => s.type === type);
+    if (!list.length) {
+      el.innerHTML = '<div class="empty" style="padding:12px 0">暂无时间点，点击右上角添加</div>';
+      continue;
+    }
+    el.innerHTML = `<table style="width:100%">
+      <thead><tr>
+        <th>时间</th><th>备注</th><th style="width:70px">启用</th><th style="width:60px">操作</th>
+      </tr></thead>
+      <tbody>${list.map(s => `<tr>
+        <td style="font-family:monospace;font-size:14px;font-weight:700;color:#1677ff">${_schedTimeLabel(s)}</td>
+        <td style="color:#888;font-size:13px">${esc(s.label||'')}</td>
+        <td>
+          <label class="toggle">
+            <input type="checkbox" ${s.enabled?'checked':''} onchange="toggleSchedule(${s.id},this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </td>
+        <td><button class="btn btn-danger btn-sm" onclick="deleteSchedule(${s.id})">删除</button></td>
+      </tr>`).join('')}
+      </tbody></table>`;
+  }
+}
+
+function showAddScheduleForm(type) {
+  document.getElementById(`addScheduleForm-${type}`).style.display = '';
+  onSchedFreqChange(type);
+}
+
+function hideAddScheduleForm(type) {
+  document.getElementById(`addScheduleForm-${type}`).style.display = 'none';
+}
+
+function onSchedFreqChange(type) {
+  const freq = document.getElementById(`newSched-${type}-freq`)?.value || 'daily';
+  const hourField    = document.getElementById(`schedField-${type}-hour`);
+  const weekdayField = document.getElementById(`schedField-${type}-weekday`);
+  if (hourField)    hourField.style.display    = freq === 'hourly' ? 'none' : '';
+  if (weekdayField) weekdayField.style.display = freq === 'weekly' ? '' : 'none';
+  updateAddSchedPreview(type);
+}
+
+function updateAddSchedPreview(type) {
+  const freq = document.getElementById(`newSched-${type}-freq`)?.value || 'daily';
+  const mVal = parseInt(document.getElementById(`newSched-${type}-minute`)?.value) || 0;
+  const el   = document.getElementById(`addSchedPreview-${type}`);
+  if (!el) return;
+  const m = String(mVal).padStart(2,'0');
+  if (freq === 'hourly') {
+    el.textContent = `将在每小时第 ${m} 分自动执行`;
+    return;
+  }
+  const hVal = parseInt(document.getElementById(`newSched-${type}-hour`)?.value) || 0;
+  const h = String(hVal).padStart(2,'0');
+  if (freq === 'weekly') {
+    const wdEl  = document.getElementById(`newSched-${type}-weekday`);
+    const wdTxt = wdEl ? `每${_SCHED_DAYS[parseInt(wdEl.value)]}` : '每周';
+    el.textContent = `将在${wdTxt} ${h}:${m} 执行`;
+  } else {
+    el.textContent = `将在每天 ${h}:${m} 执行`;
+  }
+}
+
+async function submitAddSchedule(type) {
+  const freq   = document.getElementById(`newSched-${type}-freq`)?.value || 'daily';
+  const minute = parseInt(document.getElementById(`newSched-${type}-minute`)?.value) || 0;
+  const label  = document.getElementById(`newSched-${type}-label`)?.value.trim() || '';
+
+  if (isNaN(minute) || minute < 0 || minute > 59) {
+    toast('分钟必须在 0-59 之间', true); return;
+  }
+
+  let hour = 0, weekday = null;
+  if (freq === 'hourly') {
+    hour = -1;
+  } else {
+    hour = parseInt(document.getElementById(`newSched-${type}-hour`)?.value);
+    if (isNaN(hour) || hour < 0 || hour > 23) {
+      toast('小时必须在 0-23 之间', true); return;
+    }
+    if (freq === 'weekly') {
+      const wdEl = document.getElementById(`newSched-${type}-weekday`);
+      weekday = wdEl ? parseInt(wdEl.value) : 0;
+    }
+  }
+
+  const body = {type, hour, minute, label};
+  if (weekday !== null) body.weekday = weekday;
+  await api('POST', '/api/scan-schedules', body);
+  toast('时间点已添加');
+  hideAddScheduleForm(type);
+  const labelEl = document.getElementById(`newSched-${type}-label`);
+  if (labelEl) labelEl.value = '';
+  await loadScheduleList();
+  pollStatus();
+}
+
+async function toggleSchedule(id, enabled) {
+  await api('PATCH', `/api/scan-schedules/${id}`, {enabled});
+  pollStatus();
+}
+
+async function deleteSchedule(id) {
+  if (!confirm('确定删除此时间点？')) return;
+  await api('DELETE', `/api/scan-schedules/${id}`);
+  toast('已删除');
+  await loadScheduleList();
+  pollStatus();
+}
+
+// ── 漏洞统计 ──────────────────────────────────────────────────────
+let _statsPeriod = 'week';
+let _statsReposLoaded = false;
+
+function setPeriod(p) {
+  _statsPeriod = p;
+  document.querySelectorAll('.period-tab').forEach(btn => {
+    const active = btn.dataset.p === p;
+    btn.className = 'btn btn-sm period-tab ' + (active ? 'btn-primary' : 'btn-default');
+  });
+  loadStats();
+}
+
+async function initStats() {
+  if (!_statsReposLoaded) {
+    const repos = await api('GET', '/api/repos').catch(() => []);
+    const sel = document.getElementById('repo-filter');
+    // Keep "全部" option, append repos
+    while (sel.options.length > 1) sel.remove(1);
+    repos.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.repo;
+      opt.textContent = (r.source ? `[${r.source}] ` : '') + r.repo;
+      sel.appendChild(opt);
+    });
+    _statsReposLoaded = true;
+  }
+  loadStats();
+}
+
+async function loadStats() {
+  const period = _statsPeriod;
+  const repo   = document.getElementById('repo-filter').value;
+  const data   = await api('GET', `/api/stats?period=${period}&repo=${encodeURIComponent(repo)}`).catch(() => []);
+
+  // Summary
+  const totals = {critical:0, high:0, medium:0, low:0};
+  data.forEach(d => { totals.critical+=d.critical; totals.high+=d.high; totals.medium+=d.medium; totals.low+=d.low; });
+  document.getElementById('sc-critical').textContent = totals.critical;
+  document.getElementById('sc-high').textContent     = totals.high;
+  document.getElementById('sc-medium').textContent   = totals.medium;
+  document.getElementById('sc-low').textContent      = totals.low;
+  document.getElementById('sc-total').textContent    = totals.critical+totals.high+totals.medium+totals.low;
+
+  const titleMap = {day:'近30天 · 按天统计', week:'近12周 · 按周统计', year:'近12个月 · 按月统计'};
+  document.getElementById('stats-chart-title').textContent =
+    (repo === 'all' ? '全部代码库 — ' : repo + ' — ') + titleMap[period];
+
+  // Chart
+  const labels = data.map(d => fmtPeriodLabel(d.period, period));
+  const series = {
+    critical: data.map(d => d.critical),
+    high:     data.map(d => d.high),
+    medium:   data.map(d => d.medium),
+    low:      data.map(d => d.low),
+  };
+  drawStatsChart(labels, series);
+
+  // Table
+  renderStatsTable(data, period);
+}
+
+function fmtPeriodLabel(p, period) {
+  if (!p) return '';
+  if (period === 'day')  return p.slice(5);          // MM-DD
+  if (period === 'week') return p.replace(/^\d{4}-/, ''); // W##
+  if (period === 'year') {
+    const [y, m] = p.split('-');
+    return `${y}/${m}`;
+  }
+  return p;
+}
+
+function drawStatsChart(labels, series) {
+  const canvas = document.getElementById('statsChart');
+  const W = canvas.parentElement.clientWidth - 2;
+  canvas.width  = W;
+  canvas.height = 260;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, W, 260);
+
+  const COLORS = {critical:'#ff4d4f', high:'#fa8c16', medium:'#fadb14', low:'#95de64'};
+  const SEVS   = ['low','medium','high','critical']; // bottom → top
+  const n = labels.length;
+
+  if (n === 0) {
+    ctx.fillStyle = '#bbb'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('暂无数据', W/2, 130); return;
+  }
+
+  const PL = 44, PR = 12, PT = 12, PB = 44;
+  const cW = W - PL - PR, cH = 260 - PT - PB;
+
+  const maxVal = Math.max(...labels.map((_, i) =>
+    SEVS.reduce((s, sv) => s + (series[sv][i] || 0), 0)
+  ), 1);
+
+  // Y gridlines + labels
+  ctx.strokeStyle = '#f0f0f0'; ctx.lineWidth = 1;
+  ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+  for (let t = 0; t <= 4; t++) {
+    const v = Math.round(maxVal * t / 4);
+    const y = PT + cH - (t / 4) * cH;
+    ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(W - PR, y); ctx.stroke();
+    ctx.fillText(v, PL - 5, y + 4);
+  }
+
+  // Bars
+  const slot = cW / n;
+  const barW = Math.max(4, Math.min(slot * 0.65, 40));
+  labels.forEach((label, i) => {
+    const x = PL + i * slot + (slot - barW) / 2;
+    let yBase = PT + cH;
+    SEVS.forEach(sv => {
+      const val = series[sv][i] || 0;
+      if (!val) return;
+      const bH = (val / maxVal) * cH;
+      yBase -= bH;
+      ctx.fillStyle = COLORS[sv];
+      // Rounded top only on the topmost segment
+      ctx.fillRect(x, yBase, barW, bH);
+    });
+  });
+
+  // X-axis labels
+  ctx.fillStyle = '#888'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  labels.forEach((label, i) => {
+    const x = PL + i * slot + slot / 2;
+    ctx.fillText(label, x, PT + cH + 18);
+  });
+}
+
+function renderStatsTable(data, period) {
+  const el = document.getElementById('stats-table');
+  const hasData = data.some(d => d.critical||d.high||d.medium||d.low);
+  if (!hasData) { el.innerHTML = '<div class="empty">该时段暂无漏洞数据</div>'; return; }
+  const rows = data.filter(d => d.critical||d.high||d.medium||d.low).reverse();
+  el.innerHTML = `<table>
+    <thead><tr><th>时间</th><th style="color:#ff4d4f">严重</th><th style="color:#fa8c16">高危</th><th style="color:#d4b106">中危</th><th style="color:#52c41a">低危</th><th>合计</th></tr></thead>
+    <tbody>${rows.map(d => `
+      <tr>
+        <td style="color:#888">${d.period}</td>
+        <td style="color:#ff4d4f;font-weight:700">${d.critical||0}</td>
+        <td style="color:#fa8c16;font-weight:700">${d.high||0}</td>
+        <td style="color:#d4b106">${d.medium||0}</td>
+        <td style="color:#52c41a">${d.low||0}</td>
+        <td style="font-weight:600">${(d.critical||0)+(d.high||0)+(d.medium||0)+(d.low||0)}</td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+// ── 提示词管理 ──────────────────────────────────────────────────────
+const CATEGORY_LABEL = {frontend:'前端',backend:'后端',contract:'合约',custom:'自定义'};
+const CATEGORY_COLOR = {
+  frontend:'background:#e6f4ff;color:#1677ff',
+  backend:'background:#f6ffed;color:#389e0d',
+  contract:'background:#fff7e6;color:#d46b08',
+  custom:'background:#f5f0ff;color:#531dab',
+};
+
+async function loadPrompts() {
+  const list = await api('GET', '/api/prompts').catch(() => []);
+  const el = document.getElementById('promptList');
+  if (!list.length) { el.innerHTML = '<div class="empty">暂无提示词</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>名称</th><th>分类</th><th>适用扩展名</th><th>状态</th><th>操作</th></tr></thead>
+    <tbody>${list.map(p => `
+      <tr>
+        <td style="font-weight:600">${esc(p.name)}${p.is_default ? ' <span style="font-size:10px;background:#f0f0f0;color:#888;padding:1px 6px;border-radius:3px;font-weight:400">内置</span>' : ''}</td>
+        <td><span class="badge" style="${CATEGORY_COLOR[p.category]||''}">${CATEGORY_LABEL[p.category]||p.category}</span></td>
+        <td style="font-size:12px;color:#666;font-family:monospace;max-width:260px;word-break:break-all">${esc(p.extensions)||'—'}</td>
+        <td><label class="toggle"><input type="checkbox" ${p.enabled?'checked':''} onchange="togglePrompt(${p.id},${p.is_default},this.checked)"><span class="toggle-slider"></span></label></td>
+        <td style="white-space:nowrap;display:flex;gap:6px">
+          <button class="btn btn-default btn-sm" onclick="showEditPrompt(${p.id})">编辑</button>
+          ${!p.is_default ? `<button class="btn btn-danger btn-sm" onclick="delPrompt(${p.id})">删除</button>` : ''}
+        </td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+let _promptsCache = [];
+
+async function _ensurePromptsCache() {
+  _promptsCache = await api('GET', '/api/prompts').catch(() => []);
+}
+
+function showAddPrompt() {
+  document.getElementById('pm_id').value = '';
+  document.getElementById('pm_name').value = '';
+  document.getElementById('pm_category').value = 'custom';
+  document.getElementById('pm_extensions').value = '';
+  document.getElementById('pm_content').value = '';
+  document.getElementById('pm_enabled').checked = true;
+  document.getElementById('pm_err').textContent = '';
+  document.getElementById('pm_resetBtn').style.display = 'none';
+  document.getElementById('promptModalTitle').textContent = '添加提示词';
+  openModal('promptModal');
+}
+
+async function showEditPrompt(id) {
+  await _ensurePromptsCache();
+  const p = _promptsCache.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('pm_id').value        = p.id;
+  document.getElementById('pm_name').value      = p.name;
+  document.getElementById('pm_category').value  = p.category;
+  document.getElementById('pm_extensions').value = p.extensions;
+  document.getElementById('pm_content').value   = p.content;
+  document.getElementById('pm_enabled').checked  = !!p.enabled;
+  document.getElementById('pm_err').textContent  = '';
+  document.getElementById('pm_resetBtn').style.display = p.is_default ? '' : 'none';
+  document.getElementById('promptModalTitle').textContent = `编辑提示词 — ${p.name}`;
+  openModal('promptModal');
+}
+
+async function submitPrompt() {
+  const id         = document.getElementById('pm_id').value;
+  const name       = document.getElementById('pm_name').value.trim();
+  const category   = document.getElementById('pm_category').value;
+  const extensions = document.getElementById('pm_extensions').value.trim();
+  const content    = document.getElementById('pm_content').value.trim();
+  const enabled    = document.getElementById('pm_enabled').checked;
+  const errEl      = document.getElementById('pm_err');
+  if (!name)    { errEl.textContent = '请填写名称'; return; }
+  if (!content) { errEl.textContent = '请填写提示词内容'; return; }
+  errEl.textContent = '';
+  try {
+    if (id) {
+      await api('PUT', `/api/prompts/${id}`, {name, category, extensions, content, enabled});
+    } else {
+      await api('POST', '/api/prompts', {name, category, extensions, content, enabled});
+    }
+    toast(id ? '提示词已更新' : '提示词添加成功');
+    closeModal('promptModal');
+    loadPrompts();
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+async function resetPrompt() {
+  const id = document.getElementById('pm_id').value;
+  if (!id || !confirm('确定重置为默认内容？您对此提示词的修改将丢失。')) return;
+  try {
+    await api('POST', `/api/prompts/${id}/reset`);
+    toast('已重置为默认内容');
+    closeModal('promptModal');
+    loadPrompts();
+  } catch(e) { toast(e.message, true); }
+}
+
+async function togglePrompt(id, isDefault, enabled) {
+  await _ensurePromptsCache();
+  const p = _promptsCache.find(x => x.id === id);
+  if (!p) return;
+  try {
+    await api('PUT', `/api/prompts/${id}`, {
+      name: p.name, category: p.category, extensions: p.extensions,
+      content: p.content, enabled
+    });
+  } catch(e) { toast(e.message, true); loadPrompts(); }
+}
+
+async function delPrompt(id) {
+  if (!confirm('确定删除此提示词？')) return;
+  try {
+    await api('DELETE', `/api/prompts/${id}`);
+    toast('已删除'); loadPrompts();
+  } catch(e) { toast(e.message, true); }
+}
+
+// ── 账户管理 ──────────────────────────────────────────────────────
+let _currentUser = '';
+
+function validatePassword(pwd) {
+  if (pwd.length < 8)        return '密码长度不能少于 8 位';
+  if (!/[a-z]/.test(pwd))    return '密码必须包含小写字母';
+  if (!/[A-Z]/.test(pwd))    return '密码必须包含大写字母';
+  if (!/\d/.test(pwd))       return '密码必须包含数字';
+  return null;
+}
+
+async function loadUsers() {
+  const list = await api('GET', '/api/admin-users').catch(() => []);
+  const el = document.getElementById('userList');
+  if (!list.length) { el.innerHTML = '<div class="empty">暂无用户</div>'; return; }
+  el.innerHTML = `<table>
+    <thead><tr><th>用户名</th><th>操作</th></tr></thead>
+    <tbody>${list.map(u => `
+      <tr>
+        <td style="font-weight:600">${esc(u.username)}${u.username===_currentUser ? ' <span style="font-size:11px;color:#1677ff;font-weight:400">（当前）</span>' : ''}</td>
+        <td style="display:flex;gap:8px">
+          <button class="btn btn-default btn-sm" onclick="showChangePwd('${esc(u.username)}')">修改密码</button>
+          ${u.username !== _currentUser
+            ? `<button class="btn btn-danger btn-sm" onclick="delUser('${esc(u.username)}')">删除</button>`
+            : ''}
+        </td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+function showAddUser() {
+  ['nu_username','nu_password','nu_password2'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('nu_err').textContent = '';
+  openModal('addUserModal');
+}
+
+async function submitAddUser() {
+  const username  = document.getElementById('nu_username').value.trim();
+  const password  = document.getElementById('nu_password').value;
+  const password2 = document.getElementById('nu_password2').value;
+  const errEl = document.getElementById('nu_err');
+  if (!username || username.length < 2) { errEl.textContent = '用户名至少 2 个字符'; return; }
+  const pwdErr = validatePassword(password);
+  if (pwdErr) { errEl.textContent = pwdErr; return; }
+  if (password !== password2) { errEl.textContent = '两次密码不一致'; return; }
+  errEl.textContent = '';
+  try {
+    await api('POST', '/api/admin-users', {username, password});
+    toast('用户添加成功');
+    closeModal('addUserModal');
+    loadUsers();
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+let _changePwdTarget = '';
+function showChangePwd(username) {
+  _changePwdTarget = username;
+  document.getElementById('cp_username_label').textContent = username;
+  ['cp_password','cp_password2'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cp_err').textContent = '';
+  openModal('changePwdModal');
+}
+
+async function submitChangePwd() {
+  const password  = document.getElementById('cp_password').value;
+  const password2 = document.getElementById('cp_password2').value;
+  const errEl = document.getElementById('cp_err');
+  const pwdErr = validatePassword(password);
+  if (pwdErr) { errEl.textContent = pwdErr; return; }
+  if (password !== password2) { errEl.textContent = '两次密码不一致'; return; }
+  errEl.textContent = '';
+  try {
+    await api('PATCH', `/api/admin-users/${encodeURIComponent(_changePwdTarget)}/password`, {password});
+    toast('密码修改成功');
+    closeModal('changePwdModal');
+  } catch(e) { errEl.textContent = e.message; }
+}
+
+async function delUser(username) {
+  if (!confirm(`确定删除用户 "${username}"？`)) return;
+  try {
+    await api('DELETE', `/api/admin-users/${encodeURIComponent(username)}`);
+    toast('用户已删除');
+    loadUsers();
+  } catch(e) { toast(e.message, true); }
+}
+
+// ── Syslog 设置 ───────────────────────────────────────────────────
+async function loadSettings() {
+  const cfg = await api('GET', '/api/settings').catch(() => ({}));
+  document.getElementById('maxDiff').value = cfg.max_diff_chars || 12000;
+  // 扫描时间点列表（三类）
+  await loadScheduleList();
+  // 工具 Token
+  document.getElementById('opescaToken').placeholder  = cfg.opensca_token  ? '已配置（重新输入以更新）' : '留空则仅本地扫描';
+  document.getElementById('semgrepToken').placeholder = cfg.semgrep_token  ? '已配置（重新输入以更新）' : '留空则使用社区规则';
+  loadSyslogSettings();
+}
+
+async function saveToolSettings() {
+  const body = {};
+  const opensca  = document.getElementById('opescaToken').value.trim();
+  const semgrep  = document.getElementById('semgrepToken').value.trim();
+  if (opensca)  { body.opensca_token  = opensca;  }
+  if (semgrep)  { body.semgrep_token  = semgrep;  }
+  if (Object.keys(body).length) {
+    await api('POST', '/api/settings', body);
+    if (opensca) {
+      document.getElementById('opescaToken').value = '';
+      document.getElementById('opescaToken').placeholder = '已配置（重新输入以更新）';
+    }
+    if (semgrep) {
+      document.getElementById('semgrepToken').value = '';
+      document.getElementById('semgrepToken').placeholder = '已配置（重新输入以更新）';
+    }
+  }
+  toast('工具配置已保存');
+}
+
+async function loadSyslogSettings() {
+  const cfg = await api('GET', '/api/syslog-config').catch(() => ({}));
+  document.getElementById('syslogEnabled').checked    = cfg.enabled === '1';
+  document.getElementById('syslogHost').value          = cfg.host       || '';
+  document.getElementById('syslogPort').value          = cfg.port       || '514';
+  document.getElementById('syslogProtocol').value      = cfg.protocol   || 'udp';
+  document.getElementById('syslogFacility').value      = cfg.facility   || 'local0';
+  document.getElementById('syslogAppName').value       = cfg.app_name   || 'code-audit';
+}
+
+async function saveSyslog() {
+  const body = {
+    enabled:  document.getElementById('syslogEnabled').checked ? '1' : '0',
+    host:     document.getElementById('syslogHost').value.trim(),
+    port:     document.getElementById('syslogPort').value,
+    protocol: document.getElementById('syslogProtocol').value,
+    facility: document.getElementById('syslogFacility').value,
+    app_name: document.getElementById('syslogAppName').value.trim() || 'code-audit',
+  };
+  await api('POST', '/api/syslog-config', body);
+  toast('Syslog 配置已保存');
+}
+
+async function testSyslog() {
+  const btn = document.getElementById('syslogTestBtn');
+  btn.disabled = true; btn.textContent = '测试中…';
+  // 先保存当前填写的配置
+  await saveSyslog().catch(() => {});
+  try {
+    const res = await api('POST', '/api/syslog-test');
+    toast(res.msg || '测试消息发送成功');
+  } catch(e) {
+    toast(e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '测试连接';
+  }
+}
+
+// 初始化
+renderChannelForm();
+
+// 检查登录状态
+(async () => {
+  const token = getToken();
+  if (!token) { showLogin(); return; }
+  try {
+    const me = await fetch('/api/me', {headers:{Authorization:'Bearer '+token}})
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); });
+    _currentUser = me.username;
+    showApp();
+    loadDashboard();
+  } catch(e) {
+    clearToken();
+    showLogin();
+  }
+})();
+
+// ── 春意花瓣 ──────────────────────────────────────────────────────
+(function spawnPetals() {
+  const container = document.getElementById('login-petals');
+  if (!container) return;
+  // [颜色起点, 颜色终点, 形状(0=左倾瓣 1=右倾瓣 2=圆)]
+  const palette = [
+    ['#ffb7c5','#ff8fa3', 0], ['#ffd6e4','#ffb3ca', 1],
+    ['#f9c9b6','#f7a97d', 0], ['#ffeaa0','#ffd04a', 2],
+    ['#c5e8c8','#8dd4a0', 1], ['#ffc4d6','#ff85ab', 0],
+    ['#ffe0b2','#ffcc80', 1], ['#dcedc8','#aed581', 2],
+    ['#f8bbd0','#f48fb1', 0], ['#fff9c4','#fff176', 1],
+  ];
+  for (let i = 0; i < 22; i++) {
+    const p  = document.createElement('div');
+    p.className = 'petal';
+    const cfg  = palette[i % palette.length];
+    const size = 7 + Math.random() * 9;
+    const br   = cfg[2] === 2 ? '50%' : cfg[2] === 0 ? '140% 0 140% 0' : '0 140% 0 140%';
+    const dur  = 13 + Math.random() * 14;
+    const del  = -(Math.random() * 24);
+    p.style.cssText = [
+      `left:${Math.random()*100}%`,
+      `top:-20px`,
+      `width:${size}px`,
+      `height:${(size * .72).toFixed(1)}px`,
+      `background:linear-gradient(130deg,${cfg[0]},${cfg[1]})`,
+      `border-radius:${br}`,
+      `animation-duration:${dur.toFixed(1)}s`,
+      `animation-delay:${del.toFixed(1)}s`,
+      `filter:drop-shadow(0 1px 4px ${cfg[0]}88)`,
+      `transform-origin:${(30+Math.random()*40).toFixed()}% ${(30+Math.random()*40).toFixed()}%`,
+    ].join(';');
+    container.appendChild(p);
+  }
+})();
+</script>
+</body>
+</html>
