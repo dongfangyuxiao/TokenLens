@@ -46,7 +46,7 @@ def require_auth(credentials: HTTPAuthorizationCredentials = Depends(_http_beare
 # ── 初始化 ────────────────────────────────────────────────────────
 db.init_db()
 syslog.reload(db.get_syslog_config())
-app = FastAPI(title='Code Audit Platform')
+app = FastAPI(title='春静企业代码安全平台')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
 
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
