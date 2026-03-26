@@ -165,7 +165,6 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_severity  ON findings(severity)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_logs_scan_id  ON scan_logs(scan_id)")
         # 默认管理员账户
-        conn.execute("DELETE FROM admin_users WHERE username='light'")
         row = conn.execute("SELECT username FROM admin_users WHERE username='admin'").fetchone()
         if not row:
             pwd_hash, salt = _hash_password('admin123')
@@ -380,6 +379,11 @@ def get_scans(limit=50):
         return [dict(r) for r in conn.execute(
             "SELECT * FROM scans ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()]
+
+def get_scan(scan_id: int):
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM scans WHERE id=?", (scan_id,)).fetchone()
+        return dict(row) if row else None
 
 
 # ── Syslog 配置 ───────────────────────────────────────────────────
@@ -647,12 +651,15 @@ def add_admin_user(username: str, password: str) -> bool:
 
 def delete_admin_user(username: str) -> bool:
     with get_conn() as conn:
+        row = conn.execute("SELECT 1 FROM admin_users WHERE username=?", (username,)).fetchone()
+        if not row:
+            return False
         count = conn.execute("SELECT COUNT(*) FROM admin_users").fetchone()[0]
         if count <= 1:
             return False
-        conn.execute("DELETE FROM admin_users WHERE username=?", (username,))
+        cur = conn.execute("DELETE FROM admin_users WHERE username=?", (username,))
         conn.commit()
-        return True
+        return cur.rowcount > 0
 
 def update_admin_password(username: str, new_password: str) -> bool:
     with get_conn() as conn:

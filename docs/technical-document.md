@@ -23,6 +23,7 @@
 13. [环境变量](#13-环境变量)
 14. [依赖说明](#14-依赖说明)
 15. [版本变更记录](#15-版本变更记录)
+16. [2026-03-26 本次更新](#16-2026-03-26-本次更新)
 
 ---
 
@@ -229,32 +230,42 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 
 数据库文件：`audit.db`（SQLite 3）
 
-### 5.1 表结构
+### 5.1 主要表结构
 
-#### `users` — 用户表
+#### `admin_users` — 管理员账户
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| username | TEXT PK | 用户名 |
-| password_hash | TEXT | bcrypt 哈希 |
-| role | TEXT | 角色（admin / viewer） |
+| username | TEXT PK | 管理员用户名 |
+| password_hash | TEXT | PBKDF2 哈希值 |
+| salt | TEXT | 密码盐值 |
 
-#### `code_accounts` — 代码平台账户
+#### `accounts` — 代码平台账户
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | INTEGER PK | 自增主键 |
 | platform | TEXT | github / gitlab / bitbucket / gitee / tgit / codeup |
 | name | TEXT | 显示名称 |
 | token | TEXT | API Token |
-| owner | TEXT | 组织或用户名 |
-| base_url | TEXT | 自定义域名（GitLab 私有部署） |
+| url | TEXT | 自定义平台地址 |
+| owner | TEXT | 组织、群组、工作区或用户名 |
+| created_at | TEXT | 创建时间 |
+
+#### `channels` — 通知渠道
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER PK | 自增主键 |
+| name | TEXT | 渠道名称 |
+| type | TEXT | dingtalk / feishu / wecom / slack / email |
+| config | TEXT | JSON 配置 |
 | enabled | INTEGER | 是否启用（0/1） |
+| created_at | TEXT | 创建时间 |
 
 #### `llm_profiles` — LLM 配置档案
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | INTEGER PK | 自增主键 |
 | name | TEXT | 配置名称 |
-| provider | TEXT | openai / anthropic / ollama 等 |
+| provider | TEXT | openai / anthropic / deepseek / ollama 等 |
 | model | TEXT | 模型名称 |
 | api_key | TEXT | API 密钥 |
 | base_url | TEXT | 自定义接口地址 |
@@ -263,12 +274,19 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | INTEGER PK | 自增主键 |
-| started_at | TEXT | 开始时间（ISO 8601） |
+| started_at | TEXT | 开始时间 |
 | finished_at | TEXT | 结束时间 |
 | status | TEXT | running / done / error / stopped / paused / interrupted |
 | scan_type | TEXT | poison / incremental_audit / full_audit |
+| total_commits | INTEGER | 本次分析的提交/聚合仓库数 |
+| total_findings | INTEGER | 漏洞总数 |
+| critical_count | INTEGER | 严重漏洞数 |
+| high_count | INTEGER | 高危漏洞数 |
+| medium_count | INTEGER | 中危漏洞数 |
+| low_count | INTEGER | 低危漏洞数 |
+| report_path | TEXT | HTML 报告路径 |
+| error_msg | TEXT | 异常信息 |
 | llm_profile_id | INTEGER | 使用的 LLM 配置（NULL = 系统默认） |
-| finding_count | INTEGER | 发现漏洞数 |
 
 #### `findings` — 漏洞记录
 | 字段 | 类型 | 说明 |
@@ -276,19 +294,28 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 | id | INTEGER PK | 自增主键 |
 | scan_id | INTEGER FK | 所属扫描 |
 | repo | TEXT | 仓库名 |
-| file | TEXT | 文件路径 |
-| title | TEXT | 漏洞标题 |
-| severity | TEXT | critical / high / medium / low |
-| description | TEXT | 漏洞描述 |
-| recommendation | TEXT | 修复建议 |
-| commit_sha | TEXT | 触发漏洞的提交 SHA |
+| commit_sha | TEXT | 提交 SHA |
 | commit_url | TEXT | 提交链接 |
 | author | TEXT | 提交作者 |
-| source | TEXT | 代码平台 |
+| committed_at | TEXT | 提交时间 |
+| severity | TEXT | critical / high / medium / low |
+| type | TEXT | 漏洞类型 |
+| title | TEXT | 漏洞标题 |
+| filename | TEXT | 文件路径 |
+| line | TEXT | 行号 |
+| description | TEXT | 漏洞描述 |
+| recommendation | TEXT | 修复建议 |
 | status | TEXT | new / fixing / fixed / wont_fix |
 | fingerprint | TEXT | 去重指纹 |
-| is_cross_file | INTEGER | 是否跨文件漏洞（0/1） |
+| is_cross_file | INTEGER | 是否跨文件漏洞 |
 | cross_files | TEXT | 关联文件列表（JSON） |
+
+#### `scan_repos` / `scan_logs` / `repo_owners`
+| 表名 | 说明 |
+|------|------|
+| `scan_repos` | 每次扫描按仓库汇总的严重级别统计 |
+| `scan_logs` | 扫描执行日志，供前端日志弹窗查看 |
+| `repo_owners` | 仓库负责人映射，漏洞详情中展示责任人信息 |
 
 #### `scan_schedules` — 计划任务
 | 字段 | 类型 | 说明 |
@@ -302,39 +329,35 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 | label | TEXT | 显示标签 |
 | llm_profile_id | INTEGER | 绑定的 LLM 配置 |
 
-#### `whitelist` — 漏洞白名单
+#### `finding_whitelist` — 漏洞白名单
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | INTEGER PK | 自增主键 |
-| repo | TEXT | 仓库名（空 = 全局） |
-| file | TEXT | 文件路径（空 = 全仓库） |
-| title | TEXT | 漏洞标题 |
-| fingerprint | TEXT | 去重指纹 |
+| repo | TEXT | 仓库名（空 = 通配） |
+| filename | TEXT | 文件路径（空 = 通配） |
+| title | TEXT | 漏洞标题（空 = 通配） |
+| reason | TEXT | 加入白名单原因 |
+| created_by | TEXT | 操作人 |
+| created_at | TEXT | 创建时间 |
 
-#### `notify_channels` — 通知渠道
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | INTEGER PK | 自增主键 |
-| type | TEXT | dingtalk / feishu / wecom / slack / email |
-| name | TEXT | 渠道名称 |
-| config | TEXT | JSON 配置（Webhook URL / SMTP 参数等） |
-| enabled | INTEGER | 是否启用 |
-
-#### `app_config` — 系统配置（KV 表）
-
-| key | 说明 |
-|-----|------|
-| `max_diff_chars` | 单文件 Diff 最大字符数（默认 12000） |
-| `auto_scan_enabled` | 自动扫描开关 |
-| `opensca_token` | OpenSCA 官方 Token |
+#### `app_config` / `llm_config` / `syslog_config`
+| 表 | 说明 |
+|----|------|
+| `app_config` | 系统参数，如 `max_diff_chars`、`opensca_token`、`semgrep_token` |
+| `llm_config` | 系统默认 LLM 配置及旧版兼容字段 |
+| `syslog_config` | Syslog 主机、端口、协议和 app_name |
 
 #### `prompts` — Prompt 模板
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | INTEGER PK | 自增主键 |
 | name | TEXT | 模板名称 |
-| extensions | TEXT | 匹配扩展名（逗号分隔，如 `.py,.go`） |
+| category | TEXT | frontend / backend / contract / custom |
+| extensions | TEXT | 匹配扩展名 |
 | content | TEXT | Prompt 正文 |
+| is_default | INTEGER | 是否内置模板 |
+| enabled | INTEGER | 是否启用 |
+| created_at | TEXT | 创建时间 |
 
 ---
 
@@ -359,9 +382,8 @@ Authorization: Bearer <token>
 |------|------|------|
 | GET | `/api/accounts` | 获取账户列表 |
 | POST | `/api/accounts` | 添加账户 |
-| PUT | `/api/accounts/{id}` | 更新账户 |
 | DELETE | `/api/accounts/{id}` | 删除账户 |
-| POST | `/api/accounts/{id}/test` | 测试连通性 |
+| POST | `/api/accounts/test` | 测试连通性 |
 
 ### LLM 配置
 
@@ -379,38 +401,40 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/scan/start` | 手动触发扫描 |
+| POST | `/api/scan/trigger` | 手动触发扫描 |
 | POST | `/api/scan/stop` | 停止当前扫描 |
 | POST | `/api/scan/pause` | 暂停当前扫描 |
 | POST | `/api/scan/resume` | 继续扫描 |
-| GET | `/api/scan/status` | 获取当前扫描状态 |
+| GET | `/api/status` | 获取当前扫描状态与计划摘要 |
 | GET | `/api/scans` | 获取扫描历史列表 |
-| GET | `/api/scans/{id}/log` | 获取扫描日志（SSE 流） |
+| DELETE | `/api/scans/{id}` | 删除扫描记录 |
+| POST | `/api/scans/{id}/rerun` | 重新执行某次扫描 |
+| GET | `/api/scans/{id}/findings` | 获取某次扫描的漏洞列表 |
+| GET | `/api/scans/{id}/logs` | 获取某次扫描的执行日志 |
+| GET | `/api/scans/{id}/export?format=json|markdown|docx` | 导出扫描结果 |
 
 ### 漏洞管理
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/findings` | 查询漏洞列表（支持分页/筛选） |
 | GET | `/api/findings/{id}` | 获取漏洞详情 |
-| PUT | `/api/findings/{id}/status` | 更新漏洞状态 |
-| POST | `/api/findings/{id}/whitelist` | 加入白名单 |
+| PATCH | `/api/findings/{id}/status` | 更新漏洞状态 |
 
 ### 计划任务
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/schedules` | 获取计划列表 |
-| POST | `/api/schedules` | 添加计划 |
-| PUT | `/api/schedules/{id}` | 更新计划 |
-| DELETE | `/api/schedules/{id}` | 删除计划 |
+| GET | `/api/scan-schedules` | 获取计划列表 |
+| POST | `/api/scan-schedules` | 添加计划 |
+| PATCH | `/api/scan-schedules/{id}` | 启停计划 |
+| DELETE | `/api/scan-schedules/{id}` | 删除计划 |
 
 ### 即时检测
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/instant-audit` | 提交代码片段审计 |
-| POST | `/api/instant-audit/upload` | 上传 ZIP 文件审计 |
+| POST | `/api/analyze/instant` | 提交代码片段审计 |
+| POST | `/api/analyze/instant-upload` | 上传文件 / ZIP 审计 |
 
 ### 通知渠道
 
@@ -426,12 +450,15 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/config` | 获取系统配置 |
-| POST | `/api/config` | 更新系统配置 |
-| GET | `/api/users` | 用户列表 |
-| POST | `/api/users` | 创建用户 |
-| PUT | `/api/users/{username}/password` | 修改密码 |
-| DELETE | `/api/users/{username}` | 删除用户 |
+| GET | `/api/settings` | 获取系统配置 |
+| POST | `/api/settings` | 更新系统配置 |
+| GET | `/api/admin-users` | 用户列表 |
+| POST | `/api/admin-users` | 创建用户 |
+| PATCH | `/api/admin-users/{username}/password` | 修改密码 |
+| DELETE | `/api/admin-users/{username}` | 删除用户 |
+| GET | `/api/syslog-config` | 获取 Syslog 配置 |
+| POST | `/api/syslog-config` | 保存 Syslog 配置 |
+| POST | `/api/syslog-test` | 测试 Syslog 连通性 |
 
 ---
 
@@ -503,7 +530,7 @@ syslog.send_event('scan_completed', ...)
 - HTTP 状态码 429 且 error.code 包含 "quota"
 - 错误信息包含：`insufficient_quota` / `exceeded your current quota` / `credit balance` / `billing` / `payment`
 
-触发后扫描任务中止并记录错误状态，避免持续无效调用消耗配额。
+触发后扫描任务自动切换为 `paused`，等待人工恢复，避免持续无效调用消耗配额。
 
 ### 8.3 Prompt 设计
 
@@ -683,11 +710,24 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 - 多提交同一文件去重逻辑（`_dedup_files_by_repo`）
 - LLM 额度耗尽精准识别（`LLMQuotaExhausted` 异常）
 - `findings` 表新增跨文件漏洞字段（`is_cross_file` / `cross_files`）
-- 全新春意盎然 UI 主题（森林绿侧边栏、明亮登录页）
+- 深色科技安全控制台主题与响应式布局优化
 
 **优化**
 - 计划任务调度器重构，消除冗余函数，支持动态 LLM 绑定
 - 代码平台客户端请求健壮性增强（429 重试、错误隔离）
+- 管理员删除与报告导出边界行为修复
+
+---
+
+## 16. 2026-03-26 本次更新
+
+本次针对稳定性、文档准确性和前端视觉做了直接修正：
+
+- 修复服务启动时误删指定管理员账户的硬编码逻辑
+- 修复管理员删除接口的错误返回不准确问题
+- 修复无漏洞扫描记录无法导出报告的问题
+- 前端单文件 SPA 升级为深色科技安全控制台风格，并补齐移动端自适应布局
+- 技术文档同步校正数据库表名、API 路径和当前实现说明
 
 ### v1.0（初始版本）
 

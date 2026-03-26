@@ -193,6 +193,8 @@ def delete_admin_user(username: str, current: str = Depends(require_auth)):
     if username == current:
         raise HTTPException(400, '不能删除当前登录的账户')
     if not db.delete_admin_user(username):
+        if not any(u['username'] == username for u in db.get_admin_users()):
+            raise HTTPException(404, '用户不存在')
         raise HTTPException(400, '至少保留一个管理员账户')
     syslog.send('info', 'ADMIN', f'删除用户: {username} by {current}')
     return {'ok': True}
@@ -649,9 +651,10 @@ def export_scan(scan_id: int, format: str = 'json', _: str = Depends(require_aut
     """导出扫描结果为 json / markdown / docx 格式。"""
     if format not in ('json', 'markdown', 'docx'):
         raise HTTPException(400, '无效格式，可选：json / markdown / docx')
+    scan = db.get_scan(scan_id)
+    if not scan:
+        raise HTTPException(404, '扫描记录不存在')
     findings = db.get_scan_findings(scan_id)
-    if not findings:
-        raise HTTPException(404, '扫描记录不存在或无漏洞数据')
     # 重组为 build_*_report 所需的 scan_results 格式
     commit_map: dict = {}
     for f in findings:
