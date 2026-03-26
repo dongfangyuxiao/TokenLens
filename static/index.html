@@ -478,6 +478,7 @@ input,select,textarea,.btn-default,.btn-icon{
   color:var(--text);
   border:1px solid rgba(110,231,255,.16);
   box-shadow:none;
+  caret-color:#7cecff;
 }
 input::placeholder,textarea::placeholder{color:rgba(135,167,193,.66)}
 input:focus,select:focus,textarea:focus{
@@ -724,44 +725,6 @@ nav::before{
 .status-dot.idle{background:#5b8cff}
 .status-dot.running{background:#58e6ff;box-shadow:0 0 18px rgba(88,230,255,.42)}
 .status-dot.paused{background:#ffb85c;box-shadow:0 0 18px rgba(255,184,92,.24)}
-.sidebar-footer{
-  margin:0 12px 14px;
-  padding:14px 14px 12px;
-  border:1px solid rgba(88,230,255,.14);
-  border-radius:16px;
-  background:linear-gradient(180deg,rgba(8,20,34,.9),rgba(5,13,24,.96));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 10px 24px rgba(2,8,23,.2);
-}
-.sidebar-footer-title{
-  font-size:10px;
-  letter-spacing:.24em;
-  color:rgba(150,201,235,.48);
-  text-transform:uppercase;
-  margin-bottom:10px;
-}
-.sidebar-footer-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:10px;
-}
-.sidebar-footer-item{
-  padding:10px 10px 8px;
-  border-radius:12px;
-  background:rgba(88,230,255,.05);
-  border:1px solid rgba(88,230,255,.08);
-}
-.sidebar-footer-label{
-  font-size:10px;
-  letter-spacing:.12em;
-  color:rgba(145,185,215,.55);
-  text-transform:uppercase;
-}
-.sidebar-footer-value{
-  margin-top:6px;
-  font-size:13px;
-  color:#eefbff;
-  font-weight:700;
-}
 .dashboard-hero{
   position:relative;
   overflow:hidden;
@@ -948,7 +911,6 @@ body.light .sidebar::after{
   box-shadow:0 0 16px rgba(59,130,246,.15);
 }
 body.light .logo,
-body.light .sidebar-footer,
 body.light .card,
 body.light .stat-card,
 body.light .modal{
@@ -967,7 +929,6 @@ body.light .modal-title,
 body.light .dashboard-headline,
 body.light .dashboard-pill-value,
 body.light .dashboard-summary-item .value,
-body.light .sidebar-footer-value,
 body.light .fd-meta-value,
 body.light .fd-person-name{
   color:#102033 !important;
@@ -985,8 +946,6 @@ body.light .dashboard-subline,
 body.light .dashboard-pill-label,
 body.light .dashboard-table-tag,
 body.light .dashboard-summary-item .label,
-body.light .sidebar-footer-title,
-body.light .sidebar-footer-label,
 body.light .logo-name-sub{
   color:#5b728b !important;
 }
@@ -1062,6 +1021,7 @@ body.light input,body.light select,body.light textarea,body.light .btn-default,b
   background:rgba(255,255,255,.9);
   color:#102033;
   border-color:rgba(59,130,246,.14);
+  caret-color:#2563eb;
 }
 body.light input::placeholder,body.light textarea::placeholder{color:#7b90a8}
 body.light .btn-default,body.light .btn-icon{
@@ -1070,6 +1030,36 @@ body.light .btn-default,body.light .btn-icon{
 body.light .btn-default:hover,body.light .btn-icon:hover{
   background:#f4f9ff;
   border-color:rgba(59,130,246,.2);
+}
+body.light .finding-item,
+body.light .fd-meta-item,
+body.light #llmProfileForm,
+body.light #addScheduleForm-poison,
+body.light #addScheduleForm-incremental_audit,
+body.light #addScheduleForm-full_audit{
+  background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(244,249,255,.98)) !important;
+  border-color:rgba(59,130,246,.12) !important;
+}
+body.light .log-container{
+  background:linear-gradient(180deg,#f8fbff,#eef5fc) !important;
+  border-color:rgba(59,130,246,.12);
+  color:#22364d;
+}
+body.light .log-line.info{color:#334e68}
+body.light .log-line.warning{color:#b76a00}
+body.light .log-line.error{color:#c43c52}
+body.light .finding-item .fi-desc,
+body.light .fd-desc{
+  color:#314863;
+}
+body.light .finding-item .fi-file,
+body.light .finding-item .fi-commit{
+  color:#6b8198;
+}
+body.light .finding-item .fi-rec,
+body.light .fd-rec{
+  background:#edf7ff;
+  color:#1d4ed8;
 }
 body.light .btn-primary{
   color:#fff;
@@ -1106,7 +1096,7 @@ body.light .empty{
 }
 @media (max-width: 720px){
   .stat-grid,#stats-cards{grid-template-columns:1fr!important}
-  .dashboard-pills,.dashboard-summary-grid,.sidebar-footer-grid{grid-template-columns:1fr}
+  .dashboard-pills,.dashboard-summary-grid{grid-template-columns:1fr}
   .modal,.modal-wide,.modal-xl{width:min(100vw - 24px,1000px)}
   .topbar-right{gap:8px}
   .btn,.btn-icon{width:100%}
@@ -1215,19 +1205,6 @@ body.light .empty{
     <div class="nav-item" onclick="nav('users')"><span class="icon">👤</span>账户管理</div>
     <div class="nav-item" onclick="nav('settings')"><span class="icon">⚙️</span>系统设置</div>
   </nav>
-  <div class="sidebar-footer">
-    <div class="sidebar-footer-title" data-i18n="sidebar.control">Control Node</div>
-    <div class="sidebar-footer-grid">
-      <div class="sidebar-footer-item">
-        <div class="sidebar-footer-label" data-i18n="sidebar.system">System</div>
-        <div class="sidebar-footer-value" id="sidebarState">Idle</div>
-      </div>
-      <div class="sidebar-footer-item">
-        <div class="sidebar-footer-label" data-i18n="sidebar.mode">Mode</div>
-        <div class="sidebar-footer-value">SOC</div>
-      </div>
-    </div>
-  </div>
 </aside>
 
 <div class="main">
@@ -2393,12 +2370,10 @@ async function pollStatus() {
     const scanBtn    = document.getElementById('scanBtn');
     const fsBtn      = document.getElementById('fullScanBtn');
     const poisonBtn  = document.getElementById('poisonBtn');
-    const sidebarState = document.getElementById('sidebarState');
     const heroScanState = document.getElementById('heroScanState');
     if (s.scanning) {
       dot.className = s.paused ? 'status-dot paused' : 'status-dot running';
       text.textContent = s.paused ? '已暂停' : '扫描中…';
-      if (sidebarState) sidebarState.textContent = s.paused ? 'Paused' : 'Running';
       if (heroScanState) heroScanState.textContent = s.paused ? 'PAUSED' : 'RUNNING';
       pauseBtn.textContent = s.paused ? '继续' : '暂停';
       pauseBtn.style.display = '';
@@ -2409,7 +2384,6 @@ async function pollStatus() {
     } else {
       dot.className = 'status-dot idle';
       text.textContent = '空闲';
-      if (sidebarState) sidebarState.textContent = 'Idle';
       if (heroScanState) heroScanState.textContent = 'IDLE';
       pauseBtn.style.display = 'none';
       stopBtn.style.display  = 'none';
