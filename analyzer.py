@@ -7,6 +7,23 @@ import anthropic
 from clients.semgrep_scanner import scan_patch as semgrep_scan, is_available as semgrep_ok
 from clients.opensca_scanner  import scan_patch as opensca_scan, is_available as opensca_ok
 
+class LLMQuotaExhausted(Exception):
+    """API Key 额度耗尽，无法继续调用。"""
+    pass
+
+def _raise_if_quota_error(e):
+    msg = str(e).lower()
+    if any(k in msg for k in ('insufficient_quota', 'exceeded your current quota',
+                               'quota exceeded', 'credit balance', 'you have run out',
+                               'billing', 'payment')):
+        raise LLMQuotaExhausted(str(e))
+    if getattr(e, 'status_code', None) == 402:
+        raise LLMQuotaExhausted(str(e))
+    if getattr(e, 'status_code', None) == 429:
+        code = getattr(getattr(e, 'error', None), 'code', '') or ''
+        if 'quota' in str(code).lower():
+            raise LLMQuotaExhausted(str(e))
+
 SKIP_EXTENSIONS  = {'.png','.jpg','.jpeg','.gif','.svg','.ico','.webp','.mp4','.mp3',
                     '.wav','.pdf','.zip','.tar','.gz','.lock','.sum'}
 AUDIT_EXTENSIONS = {'.js','.ts','.jsx','.tsx','.vue','.html','.css','.py','.go','.java',
@@ -112,11 +129,15 @@ def build_llm_caller(llm_cfg: dict):
             return None
         client = anthropic.Anthropic(api_key=api_key)
         def call_fn(prompt):
-            resp = client.messages.create(
-                model=effective_model, max_tokens=2048,
-                messages=[{'role': 'user', 'content': prompt}]
-            )
-            return resp.content[0].text
+            try:
+                resp = client.messages.create(
+                    model=effective_model, max_tokens=2048,
+                    messages=[{'role': 'user', 'content': prompt}]
+                )
+                return resp.content[0].text
+            except Exception as e:
+                _raise_if_quota_error(e)
+                raise
         return call_fn
 
     # OpenAI 兼容提供商
@@ -127,11 +148,15 @@ def build_llm_caller(llm_cfg: dict):
 
     client = OpenAI(api_key=effective_key, base_url=effective_base_url)
     def call_fn(prompt):
-        resp = client.chat.completions.create(
-            model=effective_model, temperature=0.1, max_tokens=2048,
-            messages=[{'role': 'user', 'content': prompt}]
-        )
-        return resp.choices[0].message.content
+        try:
+            resp = client.chat.completions.create(
+                model=effective_model, temperature=0.1, max_tokens=2048,
+                messages=[{'role': 'user', 'content': prompt}]
+            )
+            return resp.choices[0].message.content
+        except Exception as e:
+            _raise_if_quota_error(e)
+            raise
     return call_fn
 
 _SCAN_TYPE_INSTRUCTION = {
@@ -158,12 +183,12 @@ _SCAN_TYPE_INSTRUCTION = {
 
 def _analyze_single_file(filename, patch, commit_message, call_fn, prompts, max_diff_chars,
                          scan_type='full_audit'):
-    """分析单个文件，返回 findings 列表。供并发调用。"""
+    """分析单个文件，返回 (findings, summary)。供并发调用。"""
     if len(patch) > max_diff_chars:
         patch = patch[:max_diff_chars] + '\n[truncated]'
     prompt_tpl = _find_prompt(filename, prompts)
     if not prompt_tpl:
-        return []
+        return [], ''
     prompt = prompt_tpl.format(
         filename=filename,
         message=commit_message,
@@ -175,19 +200,128 @@ def _analyze_single_file(filename, patch, commit_message, call_fn, prompts, max_
     try:
         raw = call_fn(prompt)
         result = _parse(raw)
+        summary = result.get('summary', '')
         findings = []
         for f in result.get('findings', []):
             f['filename']     = filename
-            f['file_summary'] = result.get('summary', '')
+            f['file_summary'] = summary
             findings.append(f)
-        return findings
+        return findings, summary
     except Exception as e:
         print(f'    [analyzer] {filename} LLM 分析失败: {e}')
+        return [], ''
+
+# 跨文件分析每个文件最多取多少字符的代码片段（控制 prompt 总长度）
+_CROSS_SNIPPET_CHARS = 800
+# 跨文件分析最多纳入多少个文件（超出部分仅用 summary，不附代码）
+_CROSS_MAX_FILES_WITH_CODE = 15
+
+def _analyze_cross_file(files_data, commit_message, call_fn, scan_type='full_audit'):
+    """
+    第二轮跨文件分析，识别只有联合多个文件才能发现的漏洞。
+
+    files_data: list of (filename, patch_snippet, summary, per_file_findings)
+    返回 cross-file findings 列表，每条含 'files' (list[str]) 字段。
+    """
+    if len(files_data) < 2:
+        return []
+
+    # ── 构建 prompt ───────────────────────────────────────────────
+    files_section_parts = []
+    for i, (fname, snippet, summary, _) in enumerate(files_data):
+        part = f'### {fname}\n'
+        if summary:
+            part += f'File summary: {summary}\n'
+        # 前 N 个文件附带代码片段，其余仅给 summary
+        if i < _CROSS_MAX_FILES_WITH_CODE and snippet.strip():
+            trimmed = snippet[:_CROSS_SNIPPET_CHARS]
+            part += f'```\n{trimmed}\n{"..." if len(snippet) > _CROSS_SNIPPET_CHARS else ""}\n```\n'
+        files_section_parts.append(part)
+
+    existing_parts = []
+    for fname, _, _, findings in files_data:
+        for f in findings:
+            sev = f.get('severity', '?').upper()
+            title = f.get('title', '')
+            existing_parts.append(f'- [{sev}] {fname}: {title}')
+
+    files_section   = '\n'.join(files_section_parts)
+    existing_text   = '\n'.join(existing_parts) if existing_parts else 'None'
+
+    _CROSS_TASK = {
+        'poison': (
+            'Focus on coordinated supply chain attacks: e.g., two files modified together '
+            'to install a backdoor, or a dependency file plus a loader script that together '
+            'exfiltrate data.'
+        ),
+        'incremental_audit': (
+            'Only report cross-file vulnerabilities of CRITICAL or HIGH severity. '
+            'Skip medium/low cross-file issues entirely.'
+        ),
+        'full_audit': (
+            'Report all cross-file vulnerabilities across all severity levels.'
+        ),
+    }
+    task_focus = _CROSS_TASK.get(scan_type, _CROSS_TASK['full_audit'])
+
+    prompt = f"""You are performing a CROSS-FILE security analysis on a code commit.
+
+COMMIT MESSAGE: {commit_message}
+
+FILES IN THIS COMMIT:
+{files_section}
+
+PER-FILE FINDINGS ALREADY DETECTED (do NOT repeat these):
+{existing_text}
+
+TASK: {task_focus}
+
+Identify vulnerabilities that are INVISIBLE when looking at any single file alone, but become \
+apparent when two or more files are examined together. Examples:
+1. **Data flow**: User-controlled input enters in file A, travels to a dangerous sink in file B \
+   with no sanitization in between.
+2. **Auth gap**: A route defined in file A bypasses authentication middleware declared in file B.
+3. **Config impact**: An insecure setting in a config/env file directly enables an exploit in \
+   a logic file.
+4. **Coordinated change**: Two files modified together to neutralize a security control \
+   (e.g., disabling a check in one file and adding a trigger in another).
+5. **Privilege escalation path**: An unprivileged operation in file A feeds into a privileged \
+   operation in file B.
+
+Rules:
+- Do NOT re-report issues already listed under "PER-FILE FINDINGS ALREADY DETECTED".
+- If no cross-file vulnerability exists, return an empty array — do NOT invent issues.
+- List only the files actually involved in each finding under "files".
+
+Respond ONLY with valid JSON (no markdown fences):
+{{"cross_file_findings": [{{"title": "string", "severity": "critical|high|medium|low", \
+"description": "string (explain the cross-file flow clearly)", \
+"files": ["file_a.py", "file_b.py"], \
+"recommendation": "string", "line": ""}}]}}"""
+
+    try:
+        raw = call_fn(prompt)
+        # _parse 支持 JSON 外包 markdown 代码块的情况
+        raw_text = raw.strip()
+        if raw_text.startswith('```'):
+            raw_text = raw_text.split('\n', 1)[-1]
+            if '```' in raw_text:
+                raw_text = raw_text.rsplit('```', 1)[0]
+        raw_text = raw_text.strip()
+        try:
+            data = json.loads(raw_text)
+        except Exception:
+            s, e = raw_text.find('{'), raw_text.rfind('}')
+            data = json.loads(raw_text[s:e+1]) if s != -1 and e != -1 else {}
+        return data.get('cross_file_findings', [])
+    except Exception as e:
+        print(f'    [analyzer] 跨文件分析失败: {e}')
         return []
 
 def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
                    opensca_token='', semgrep_token='',
                    added_only=False, scan_type='full_audit',
+                   stop_event=None,
                    # 旧版兼容参数
                    deepseek_key='', anthropic_key=''):
     """
@@ -227,8 +361,14 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
     message = commit.get('message', '')
     all_findings = []
 
+    # patch 字典，供跨文件分析使用（保留原始内容，不受 max_diff_chars 截断）
+    patch_map = {fname: patch for fname, patch in eligible}
+
     if call_fn:
-        # ── LLM 并发分析 ──────────────────────────────────────────
+        # ── 第一轮：LLM 并发逐文件分析 ────────────────────────────
+        file_summaries: dict[str, str] = {}   # fname -> LLM 生成的文件摘要
+        file_findings:  dict[str, list] = {}  # fname -> per-file findings
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             future_map = {
                 executor.submit(
@@ -238,9 +378,17 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
                 for fname, patch in eligible
             }
             for future in concurrent.futures.as_completed(future_map):
+                # 每完成一个文件就检查一次停止信号
+                if stop_event and stop_event.is_set():
+                    for f in future_map:
+                        f.cancel()
+                    return all_findings
                 fname = future_map[future]
                 try:
-                    for f in future.result():
+                    findings, summary = future.result()
+                    file_summaries[fname] = summary
+                    file_findings[fname]  = findings
+                    for f in findings:
                         # 附加指纹
                         f['fingerprint'] = _make_fingerprint(
                             repo, f['filename'],
@@ -249,6 +397,29 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
                         all_findings.append(f)
                 except Exception as e:
                     print(f'    [analyzer] {fname} 并发分析出错: {e}')
+
+        # ── 第二轮：跨文件联合分析 ────────────────────────────────
+        if len(eligible) >= 2 and not (stop_event and stop_event.is_set()):
+            print(f'    [analyzer] 开始跨文件联合分析（{len(eligible)} 个文件）…')
+            files_data = [
+                (fname,
+                 patch_map.get(fname, '')[:_CROSS_SNIPPET_CHARS * 2],  # 给 cross 用的原始片段稍长
+                 file_summaries.get(fname, ''),
+                 file_findings.get(fname, []))
+                for fname, _ in eligible
+            ]
+            cross = _analyze_cross_file(files_data, message, call_fn, scan_type)
+            if cross:
+                print(f'    [analyzer] 跨文件分析发现 {len(cross)} 个额外漏洞')
+            for cf in cross:
+                involved = cf.get('files', [])
+                cf['filename']      = ' + '.join(involved) if involved else '(cross-file)'
+                cf['is_cross_file'] = True
+                cf['cross_files']   = involved   # 保留原始列表供 UI 使用
+                cf['fingerprint']   = _make_fingerprint(
+                    repo, cf['filename'], cf.get('title', ''), 'xf'
+                )
+                all_findings.append(cf)
     else:
         # ── 无 LLM：semgrep + opensca ─────────────────────────────
         for filename, patch in eligible:

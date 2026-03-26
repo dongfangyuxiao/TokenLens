@@ -101,9 +101,17 @@ def _parse_unified_diff(diff_text: str) -> list:
     return [f for f in files if f.get('filename') and f.get('patch')]
 
 
-def fetch_recent_changes(token, workspace='', scan_hours=1, full_scan=False):
-    since = (None if full_scan
-             else datetime.now(timezone.utc) - timedelta(hours=scan_hours))
+def fetch_recent_changes(token, workspace='', since_iso=None):
+    """
+    拉取 since_iso 之后的所有提交（每次提交均单独返回，确保不遗漏任何提交）。
+    since_iso: ISO 8601 字符串；None 表示拉全量。
+    """
+    since_dt = None
+    if since_iso:
+        try:
+            since_dt = datetime.fromisoformat(since_iso.replace('Z', '+00:00'))
+        except Exception:
+            since_dt = None
     results = []
 
     try:
@@ -116,30 +124,13 @@ def fetch_recent_changes(token, workspace='', scan_hours=1, full_scan=False):
         print(f'  [Bitbucket] 获取仓库失败: {e}')
         return []
 
-    MAIN_BRANCHES = ['main', 'master']
-
     for repo in repos:
         full_name = repo.get('full_name', '')
         if not full_name:
             continue
         try:
-            if full_scan:
-                # 全量扫描：只拉 main / master 分支，去重合并
-                seen, commits = set(), []
-                for branch in MAIN_BRANCHES:
-                    try:
-                        for c in _paginate_commits(
-                            f'{BASE}/repositories/{full_name}/commits',
-                            token, None, branch=branch
-                        ):
-                            if c.get('hash') not in seen:
-                                seen.add(c['hash'])
-                                commits.append(c)
-                    except Exception:
-                        pass
-            else:
-                commits = _paginate_commits(
-                    f'{BASE}/repositories/{full_name}/commits', token, since)
+            commits = _paginate_commits(
+                f'{BASE}/repositories/{full_name}/commits', token, since_dt)
         except Exception:
             continue
 

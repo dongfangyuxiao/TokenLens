@@ -144,6 +144,14 @@ def init_db():
             enabled INTEGER DEFAULT 1,
             label   TEXT    DEFAULT ''
         );
+        CREATE TABLE IF NOT EXISTS llm_profiles (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            name      TEXT NOT NULL,
+            provider  TEXT NOT NULL DEFAULT '',
+            model     TEXT DEFAULT '',
+            api_key   TEXT DEFAULT '',
+            base_url  TEXT DEFAULT ''
+        );
         """)
         # Syslog 默认配置
         conn.execute("INSERT OR IGNORE INTO syslog_config VALUES ('enabled','0')")
@@ -167,12 +175,18 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('max_diff_chars','12000')")
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('auto_scan_enabled','1')")
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('opensca_token','')")
-        # 迁移旧版 scan_schedules（无 type / weekday 列）
+        # 迁移旧版 scan_schedules（无 type / weekday / llm_profile_id 列）
         sched_cols = [r['name'] for r in conn.execute("PRAGMA table_info(scan_schedules)").fetchall()]
         if 'type' not in sched_cols:
             conn.execute("ALTER TABLE scan_schedules ADD COLUMN type TEXT NOT NULL DEFAULT 'poison'")
         if 'weekday' not in sched_cols:
             conn.execute("ALTER TABLE scan_schedules ADD COLUMN weekday INTEGER DEFAULT NULL")
+        if 'llm_profile_id' not in sched_cols:
+            conn.execute("ALTER TABLE scan_schedules ADD COLUMN llm_profile_id INTEGER DEFAULT NULL")
+        # 迁移 scans 表
+        scan_cols = [r['name'] for r in conn.execute("PRAGMA table_info(scans)").fetchall()]
+        if 'llm_profile_id' not in scan_cols:
+            conn.execute("ALTER TABLE scans ADD COLUMN llm_profile_id INTEGER DEFAULT NULL")
         # 若各类型均无默认记录则初始化
         if not conn.execute("SELECT 1 FROM scan_schedules WHERE type='poison'").fetchone():
             conn.execute("INSERT INTO scan_schedules (type,hour,minute,enabled,label) VALUES ('poison',-1,0,1,'每小时执行')")
@@ -213,6 +227,10 @@ def init_db():
             conn.execute("ALTER TABLE findings ADD COLUMN status TEXT DEFAULT 'new'")
         if 'fingerprint' not in existing_cols:
             conn.execute("ALTER TABLE findings ADD COLUMN fingerprint TEXT DEFAULT ''")
+        if 'is_cross_file' not in existing_cols:
+            conn.execute("ALTER TABLE findings ADD COLUMN is_cross_file INTEGER DEFAULT 0")
+        if 'cross_files' not in existing_cols:
+            conn.execute("ALTER TABLE findings ADD COLUMN cross_files TEXT DEFAULT ''")
         scan_cols = [r['name'] for r in conn.execute("PRAGMA table_info(scans)").fetchall()]
         if 'scan_type' not in scan_cols:
             conn.execute("ALTER TABLE scans ADD COLUMN scan_type TEXT DEFAULT 'incremental'")
@@ -291,14 +309,14 @@ def set_app_config(key, value):
         conn.commit()
 
 # ── 扫描记录 ──────────────────────────────────────────────────────
-def create_scan(scan_type='incremental_audit', full_scan=False):
+def create_scan(scan_type='incremental_audit', full_scan=False, llm_profile_id=None):
     # full_scan 为旧版兼容参数
     if full_scan and scan_type == 'incremental_audit':
         scan_type = 'full_audit'
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO scans (started_at, status, scan_type) VALUES (?,?,?)",
-            (datetime.now().isoformat(), 'running', scan_type)
+            "INSERT INTO scans (started_at, status, scan_type, llm_profile_id) VALUES (?,?,?,?)",
+            (datetime.now().isoformat(), 'running', scan_type, llm_profile_id)
         )
         conn.commit()
         return cur.lastrowid
@@ -328,6 +346,26 @@ def update_scan_status(scan_id: int, status: str):
     with get_conn() as conn:
         conn.execute("UPDATE scans SET status=? WHERE id=?", (status, scan_id))
         conn.commit()
+
+def mark_interrupted_scans():
+    """服务启动时将未正常结束的扫描标记为 interrupted。"""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE scans SET status='interrupted', finished_at=? "
+            "WHERE status IN ('running', 'paused')",
+            (datetime.now().isoformat(),)
+        )
+        conn.commit()
+
+def get_last_successful_scan_time(scan_type: str):
+    """返回该扫描类型上次成功完成的 finished_at 字符串，若无则返回 None。"""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT finished_at FROM scans WHERE scan_type=? AND status='done' "
+            "ORDER BY finished_at DESC LIMIT 1",
+            (scan_type,)
+        ).fetchone()
+        return row['finished_at'] if row else None
 
 def delete_scan(scan_id: int):
     with get_conn() as conn:
@@ -374,16 +412,20 @@ def save_scan_repos(scan_id: int, repos: list):
         conn.commit()
 
 def save_findings(scan_id: int, scan_results: list):
-    """保存每条漏洞发现到 findings 表（含指纹）"""
+    """保存每条漏洞发现到 findings 表（含指纹、跨文件标记）"""
+    import json as _json
     with get_conn() as conn:
         conn.execute("DELETE FROM findings WHERE scan_id=?", (scan_id,))
         for item in scan_results:
             for f in item.get('findings', []):
+                cross_files_json = _json.dumps(f.get('cross_files', []), ensure_ascii=False) \
+                                   if f.get('is_cross_file') else ''
                 conn.execute(
                     "INSERT INTO findings "
                     "(scan_id,repo,commit_sha,commit_url,author,committed_at,"
-                    "severity,type,title,filename,line,description,recommendation,fingerprint) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "severity,type,title,filename,line,description,recommendation,"
+                    "fingerprint,is_cross_file,cross_files) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (scan_id,
                      item.get('repo', ''),
                      item.get('commit_sha', ''),
@@ -397,7 +439,9 @@ def save_findings(scan_id: int, scan_results: list):
                      str(f.get('line', '')),
                      f.get('description', ''),
                      f.get('recommendation', ''),
-                     f.get('fingerprint', ''))
+                     f.get('fingerprint', ''),
+                     1 if f.get('is_cross_file') else 0,
+                     cross_files_json)
                 )
         conn.commit()
 
@@ -410,6 +454,32 @@ def get_scan_findings(scan_id: int):
             (scan_id,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+def get_finding_detail(finding_id: int):
+    """获取单条漏洞详情，附带仓库负责人信息（无匹配时回退到提交人）。"""
+    import re as _re
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM findings WHERE id=?", (finding_id,)).fetchone()
+        if not row:
+            return None
+        f = dict(row)
+        repo = f.get('repo', '')
+        # 去除 "(branch)" 后缀再匹配，如 "org/repo(main)" → "org/repo"
+        base_repo = _re.sub(r'\([^)]*\)$', '', repo).strip()
+        owner_row = conn.execute(
+            "SELECT responsible_person, contact FROM repo_owners "
+            "WHERE repo=? OR repo=? ORDER BY id DESC LIMIT 1",
+            (repo, base_repo)
+        ).fetchone()
+        if owner_row and owner_row['responsible_person']:
+            f['responsible_person']    = owner_row['responsible_person']
+            f['contact']               = owner_row['contact'] or ''
+            f['responsible_is_author'] = False
+        else:
+            f['responsible_person']    = f.get('author', '—')
+            f['contact']               = ''
+            f['responsible_is_author'] = True
+        return f
 
 def get_repos():
     with get_conn() as conn:
@@ -706,23 +776,23 @@ def get_scan_schedules(scan_type: str = None):
     with get_conn() as conn:
         if scan_type:
             rows = conn.execute(
-                "SELECT id,type,hour,minute,weekday,enabled,label FROM scan_schedules "
+                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id FROM scan_schedules "
                 "WHERE type=? ORDER BY hour,minute",
                 (scan_type,)
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id,type,hour,minute,weekday,enabled,label FROM scan_schedules "
+                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id FROM scan_schedules "
                 "ORDER BY type,hour,minute"
             ).fetchall()
         return [dict(r) for r in rows]
 
 def add_scan_schedule(scan_type: str, hour: int, minute: int,
-                      weekday=None, label: str = '') -> int:
+                      weekday=None, label: str = '', llm_profile_id=None) -> int:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO scan_schedules (type,hour,minute,weekday,enabled,label) VALUES (?,?,?,?,1,?)",
-            (scan_type, hour, minute, weekday, label)
+            "INSERT INTO scan_schedules (type,hour,minute,weekday,enabled,label,llm_profile_id) VALUES (?,?,?,?,1,?,?)",
+            (scan_type, hour, minute, weekday, label, llm_profile_id)
         )
         conn.commit()
         return cur.lastrowid
@@ -746,3 +816,44 @@ def is_whitelisted(repo: str, filename: str, title: str, whitelist: list) -> boo
         if repo_match and file_match and title_match:
             return True
     return False
+
+# ── LLM 配置列表 ──────────────────────────────────────────────────
+def get_llm_profiles():
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, name, provider, model, base_url FROM llm_profiles ORDER BY id"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+def get_llm_profile(profile_id: int):
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM llm_profiles WHERE id=?", (profile_id,)).fetchone()
+        return dict(row) if row else None
+
+def add_llm_profile(name: str, provider: str, model: str, api_key: str, base_url: str) -> int:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "INSERT INTO llm_profiles (name, provider, model, api_key, base_url) VALUES (?,?,?,?,?)",
+            (name, provider, model, api_key, base_url)
+        )
+        conn.commit()
+        return cur.lastrowid
+
+def update_llm_profile(profile_id: int, name: str, provider: str, model: str, api_key: str, base_url: str):
+    with get_conn() as conn:
+        if api_key and '****' not in api_key:
+            conn.execute(
+                "UPDATE llm_profiles SET name=?, provider=?, model=?, api_key=?, base_url=? WHERE id=?",
+                (name, provider, model, api_key, base_url, profile_id)
+            )
+        else:
+            conn.execute(
+                "UPDATE llm_profiles SET name=?, provider=?, model=?, base_url=? WHERE id=?",
+                (name, provider, model, base_url, profile_id)
+            )
+        conn.commit()
+
+def delete_llm_profile(profile_id: int):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM llm_profiles WHERE id=?", (profile_id,))
+        conn.commit()

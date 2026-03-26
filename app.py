@@ -45,6 +45,7 @@ def require_auth(credentials: HTTPAuthorizationCredentials = Depends(_http_beare
 
 # ── 初始化 ────────────────────────────────────────────────────────
 db.init_db()
+db.mark_interrupted_scans()
 syslog.reload(db.get_syslog_config())
 app = FastAPI(title='春静企业代码安全平台')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
@@ -60,7 +61,7 @@ _pause_event.set()
 
 _WEEKDAY_CN = ['周一','周二','周三','周四','周五','周六','周日']
 
-def _run_in_thread(scan_type: str):
+def _run_in_thread(scan_type: str, llm_profile_id=None):
     """在新线程中执行扫描，持有 _scan_lock。"""
     if not _scan_lock.acquire(blocking=False):
         print('[scheduler] 上次扫描未结束，跳过')
@@ -69,47 +70,34 @@ def _run_in_thread(scan_type: str):
     _pause_event.set()
     try:
         run_scan(BASE_URL, scan_type=scan_type,
-                 stop_event=_stop_event, pause_event=_pause_event)
+                 stop_event=_stop_event, pause_event=_pause_event,
+                 llm_profile_id=llm_profile_id)
     finally:
         _scan_lock.release()
-
-def _scheduled_poison():
-    _run_in_thread('poison')
-
-def _scheduled_incremental_audit():
-    _run_in_thread('incremental_audit')
-
-def _scheduled_full_audit():
-    _run_in_thread('full_audit')
-
-_TYPE_FN = {
-    'poison'           : _scheduled_poison,
-    'incremental_audit': _scheduled_incremental_audit,
-    'full_audit'       : _scheduled_full_audit,
-}
 
 def _reschedule():
     scheduler.remove_all_jobs()
     for s in db.get_scan_schedules():
         if not s['enabled']:
             continue
-        fn = _TYPE_FN.get(s['type'])
-        if fn is None:
+        if s['type'] not in {'poison', 'incremental_audit', 'full_audit'}:
             continue
+        scan_type      = s['type']
+        llm_profile_id = s.get('llm_profile_id')
         h  = s['hour']
         m  = s['minute']
         wd = s.get('weekday')
+        fn = lambda st=scan_type, lpid=llm_profile_id: _run_in_thread(st, lpid)
         if h == -1:
-            # 每小时整点
             scheduler.add_job(fn, 'cron', hour='*', minute=m, id=f"sched_{s['id']}")
-            print(f"[scheduler] {s['type']} #{s['id']}: 每小时第 {m:02d} 分")
+            print(f"[scheduler] {scan_type} #{s['id']}: 每小时第 {m:02d} 分")
         elif wd is not None:
             scheduler.add_job(fn, 'cron', day_of_week=wd, hour=h, minute=m,
                               id=f"sched_{s['id']}")
-            print(f"[scheduler] {s['type']} #{s['id']}: 每{_WEEKDAY_CN[wd]} {h:02d}:{m:02d}")
+            print(f"[scheduler] {scan_type} #{s['id']}: 每{_WEEKDAY_CN[wd]} {h:02d}:{m:02d}")
         else:
             scheduler.add_job(fn, 'cron', hour=h, minute=m, id=f"sched_{s['id']}")
-            print(f"[scheduler] {s['type']} #{s['id']}: 每天 {h:02d}:{m:02d}")
+            print(f"[scheduler] {scan_type} #{s['id']}: 每天 {h:02d}:{m:02d}")
 
 _reschedule()
 scheduler.start()
@@ -321,6 +309,54 @@ def test_channel_api(cid: int, _: str = Depends(require_auth)):
     return {'ok': True, 'msg': f'测试消息已发送至 {ch["name"]}'}
 
 # ── LLM 配置 API ─────────────────────────────────────────────────
+# ── LLM 配置列表 API ──────────────────────────────────────────────
+class LLMProfileIn(BaseModel):
+    name    : str
+    provider: str
+    model   : str = ''
+    api_key : str = ''
+    base_url: str = ''
+
+@app.get('/api/llm-profiles')
+def list_llm_profiles(_: str = Depends(require_auth)):
+    return db.get_llm_profiles()
+
+@app.post('/api/llm-profiles')
+def add_llm_profile(body: LLMProfileIn, _: str = Depends(require_auth)):
+    if not body.name.strip() or not body.provider.strip():
+        raise HTTPException(400, '名称和提供商不能为空')
+    pid = db.add_llm_profile(body.name.strip(), body.provider, body.model, body.api_key, body.base_url)
+    return {'ok': True, 'id': pid}
+
+@app.put('/api/llm-profiles/{pid}')
+def update_llm_profile(pid: int, body: LLMProfileIn, _: str = Depends(require_auth)):
+    if not db.get_llm_profile(pid):
+        raise HTTPException(404, '配置不存在')
+    db.update_llm_profile(pid, body.name.strip(), body.provider, body.model, body.api_key, body.base_url)
+    return {'ok': True}
+
+@app.delete('/api/llm-profiles/{pid}')
+def delete_llm_profile(pid: int, _: str = Depends(require_auth)):
+    db.delete_llm_profile(pid)
+    return {'ok': True}
+
+@app.post('/api/llm-profiles/{pid}/test')
+def test_llm_profile(pid: int, _: str = Depends(require_auth)):
+    from analyzer import build_llm_caller
+    profile = db.get_llm_profile(pid)
+    if not profile:
+        raise HTTPException(404, '配置不存在')
+    llm_cfg = {'provider': profile['provider'], 'model': profile['model'],
+               'api_key': profile['api_key'], 'base_url': profile['base_url']}
+    call_fn = build_llm_caller(llm_cfg)
+    if not call_fn:
+        raise HTTPException(400, '未配置 API Key')
+    try:
+        reply = call_fn('Reply with exactly one word: OK')
+        return {'ok': True, 'reply': reply.strip()}
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
 _SENSITIVE_LLM_KEYS = {'deepseek_api_key', 'anthropic_api_key', 'api_key'}
 
 class LLMConfig(BaseModel):
@@ -360,6 +396,19 @@ def save_llm(body: LLMConfig, _: str = Depends(require_auth)):
         db.set_llm_config('anthropic_api_key', body.anthropic_api_key)
     return {'ok': True}
 
+@app.post('/api/llm-config/test')
+def test_llm(_: str = Depends(require_auth)):
+    from analyzer import build_llm_caller
+    llm_cfg = db.get_llm_config()
+    call_fn = build_llm_caller(llm_cfg)
+    if not call_fn:
+        raise HTTPException(400, '未配置 LLM，请先填写提供商和 API Key')
+    try:
+        reply = call_fn('Reply with exactly one word: OK')
+        return {'ok': True, 'reply': reply.strip()}
+    except Exception as e:
+        raise HTTPException(502, str(e))
+
 # ── 应用设置 API ──────────────────────────────────────────────────
 @app.get('/api/settings')
 def get_settings(_: str = Depends(require_auth)):
@@ -376,11 +425,12 @@ def save_settings(body: dict, _: str = Depends(require_auth)):
 _VALID_TYPES = {'poison', 'incremental_audit', 'full_audit'}
 
 class ScanScheduleIn(BaseModel):
-    type   : str
-    hour   : int          # -1 = 每小时
-    minute : int = 0
-    weekday: int = None   # None=每天, 0-6=指定星期
-    label  : str = ''
+    type          : str
+    hour          : int          # -1 = 每小时
+    minute        : int = 0
+    weekday       : int = None   # None=每天, 0-6=指定星期
+    label         : str = ''
+    llm_profile_id: int = None
 
 @app.get('/api/scan-schedules')
 def list_scan_schedules(_: str = Depends(require_auth)):
@@ -397,7 +447,7 @@ def add_scan_schedule(body: ScanScheduleIn, _: str = Depends(require_auth)):
     if body.weekday is not None and not (0 <= body.weekday <= 6):
         raise HTTPException(400, '星期必须在 0-6 之间')
     sid = db.add_scan_schedule(body.type, body.hour, body.minute,
-                               body.weekday, body.label.strip())
+                               body.weekday, body.label.strip(), body.llm_profile_id)
     _reschedule()
     return {'ok': True, 'id': sid}
 
@@ -421,9 +471,10 @@ _SCAN_TYPE_LABELS = {
 }
 
 class ScanTrigger(BaseModel):
-    scan_type: str  = 'incremental_audit'
+    scan_type     : str  = 'incremental_audit'
+    llm_profile_id: int  = None
     # 旧版兼容
-    full_scan: bool = False
+    full_scan     : bool = False
 
 @app.post('/api/scan/trigger')
 def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(require_auth)):
@@ -438,10 +489,12 @@ def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(requ
     _pause_event.set()
     label = _SCAN_TYPE_LABELS[scan_type]
     syslog.send('info', 'SCAN', f'{label}由 {operator} 触发')
+    llm_profile_id = body.llm_profile_id
     def _run():
         try:
             run_scan(BASE_URL, scan_type=scan_type,
-                     stop_event=_stop_event, pause_event=_pause_event)
+                     stop_event=_stop_event, pause_event=_pause_event,
+                     manual=True, llm_profile_id=llm_profile_id)
         finally:
             _scan_lock.release()
     threading.Thread(target=_run, daemon=True).start()
@@ -516,12 +569,14 @@ def rerun_scan(scan_id: int, operator: str = Depends(require_auth)):
         scan_type = 'incremental_audit'
     _stop_event.clear()
     _pause_event.set()
-    label = _SCAN_TYPE_LABELS.get(scan_type, scan_type)
+    label          = _SCAN_TYPE_LABELS.get(scan_type, scan_type)
+    llm_profile_id = target.get('llm_profile_id')
     syslog.send('info', 'SCAN', f'{label}（重新运行 #{scan_id}）由 {operator} 触发')
     def _run():
         try:
             run_scan(BASE_URL, scan_type=scan_type,
-                     stop_event=_stop_event, pause_event=_pause_event)
+                     stop_event=_stop_event, pause_event=_pause_event,
+                     manual=True, llm_profile_id=llm_profile_id)
         finally:
             _scan_lock.release()
     threading.Thread(target=_run, daemon=True).start()
@@ -535,11 +590,65 @@ def get_findings(scan_id: int, _: str = Depends(require_auth)):
 def get_scan_logs(scan_id: int, _: str = Depends(require_auth)):
     return db.get_scan_logs(scan_id)
 
+def _build_docx_report(scan_results):
+    """生成 Word 格式审计报告，返回 bytes。"""
+    from docx import Document
+    from docx.shared import Pt, RGBColor, Cm
+    from docx.oxml.ns import qn
+    SEV_ZH = {'critical': '严重', 'high': '高危', 'medium': '中危', 'low': '低危', 'info': '信息'}
+    SEV_COLOR = {'critical': 'FF4D4F', 'high': 'FA8C16', 'medium': 'D4B106', 'low': '52C41A', 'info': '1677FF'}
+    doc = Document()
+    # 页边距
+    for section in doc.sections:
+        section.top_margin = Cm(2); section.bottom_margin = Cm(2)
+        section.left_margin = Cm(2.5); section.right_margin = Cm(2.5)
+    doc.add_heading('代码安全审计报告', 0)
+    doc.add_paragraph(f'生成时间：{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+    total = sum(len(e.get('findings', [])) for e in scan_results)
+    doc.add_paragraph(f'共发现漏洞：{total} 个，涉及仓库：{len(scan_results)} 个')
+    doc.add_paragraph()
+    for entry in scan_results:
+        doc.add_heading(f'仓库：{entry["repo"]}', level=1)
+        meta = doc.add_paragraph()
+        meta.add_run('提交 SHA：').bold = True
+        meta.add_run(entry.get('commit_sha', '-')[:12])
+        meta.add_run('　作者：').bold = True
+        meta.add_run(entry.get('author', '-'))
+        if entry.get('committed_at'):
+            meta.add_run(f'　时间：{entry["committed_at"]}')
+        findings = entry.get('findings', [])
+        if not findings:
+            doc.add_paragraph('（本提交无发现漏洞）')
+            continue
+        for finding in findings:
+            sev = finding.get('severity', 'info')
+            sev_zh = SEV_ZH.get(sev, sev)
+            h = doc.add_heading(f'[{sev_zh}] {finding.get("title", "未知漏洞")}', level=2)
+            run = h.runs[0] if h.runs else None
+            if run:
+                color = SEV_COLOR.get(sev, '1677FF')
+                run.font.color.rgb = RGBColor(int(color[:2],16), int(color[2:4],16), int(color[4:],16))
+            if finding.get('filename'):
+                p = doc.add_paragraph()
+                p.add_run('文件：').bold = True
+                p.add_run(finding['filename'])
+            if finding.get('description'):
+                doc.add_paragraph(finding['description'])
+            if finding.get('recommendation'):
+                p2 = doc.add_paragraph()
+                p2.add_run('修复建议：').bold = True
+                p2.add_run(finding['recommendation'])
+            doc.add_paragraph()
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf.read()
+
 @app.get('/api/scans/{scan_id}/export')
 def export_scan(scan_id: int, format: str = 'json', _: str = Depends(require_auth)):
-    """导出扫描结果为 json 或 markdown 格式。"""
-    if format not in ('json', 'markdown'):
-        raise HTTPException(400, '无效格式，可选：json / markdown')
+    """导出扫描结果为 json / markdown / docx 格式。"""
+    if format not in ('json', 'markdown', 'docx'):
+        raise HTTPException(400, '无效格式，可选：json / markdown / docx')
     findings = db.get_scan_findings(scan_id)
     if not findings:
         raise HTTPException(404, '扫描记录不存在或无漏洞数据')
@@ -568,6 +677,13 @@ def export_scan(scan_id: int, format: str = 'json', _: str = Depends(require_aut
             media_type='application/json',
             headers={'Content-Disposition': f'attachment; filename="scan_{scan_id}.json"'}
         )
+    elif format == 'docx':
+        content = _build_docx_report(scan_results)
+        return Response(
+            content=content,
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            headers={'Content-Disposition': f'attachment; filename="scan_{scan_id}.docx"'}
+        )
     else:
         md = build_markdown_report(scan_results)
         return Response(
@@ -575,6 +691,14 @@ def export_scan(scan_id: int, format: str = 'json', _: str = Depends(require_aut
             media_type='text/markdown; charset=utf-8',
             headers={'Content-Disposition': f'attachment; filename="scan_{scan_id}.md"'}
         )
+
+@app.get('/api/findings/{finding_id}')
+def get_finding(finding_id: int, _: str = Depends(require_auth)):
+    """获取单条漏洞详情，含仓库负责人信息。"""
+    f = db.get_finding_detail(finding_id)
+    if not f:
+        raise HTTPException(404, '漏洞不存在')
+    return f
 
 class FindingStatusIn(BaseModel):
     status: str

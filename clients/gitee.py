@@ -1,8 +1,14 @@
-import requests
-from datetime import datetime, timezone, timedelta
+import requests, base64, os
 
-BASE = 'https://gitee.com/api/v5'
-
+BASE             = 'https://gitee.com/api/v5'
+AUDIT_EXTENSIONS = {'.js','.ts','.jsx','.tsx','.vue','.html','.css','.py','.go','.java',
+                    '.rb','.php','.rs','.cs','.cpp','.c','.sol','.json','.yaml','.yml',
+                    '.toml','.env','.sh','.bash','.svelte','.mjs','.cjs'}
+AUDIT_BASENAMES  = {'Dockerfile'}
+SKIP_EXTENSIONS  = {'.png','.jpg','.jpeg','.gif','.svg','.ico','.webp','.mp4','.mp3',
+                    '.wav','.pdf','.zip','.tar','.gz','.lock','.sum','.woff','.woff2',
+                    '.ttf','.eot','.map','.min.js'}
+MAIN_BRANCHES    = ['main', 'master']
 
 def _get(url, token, params=None):
     p = dict(params or {})
@@ -10,17 +16,6 @@ def _get(url, token, params=None):
     resp = requests.get(url, params=p, timeout=30)
     resp.raise_for_status()
     return resp.json()
-
-
-def test_connection(token, base_url=''):
-    """Returns (error_msg, username). error_msg is None on success."""
-    try:
-        resp = requests.get(f'{BASE}/user', params={'access_token': token}, timeout=10)
-        resp.raise_for_status()
-        user = resp.json()
-        return None, user.get('login', 'unknown')
-    except Exception as e:
-        return str(e), None
 
 def _paginate(url, token, params=None):
     params = dict(params or {})
@@ -37,13 +32,49 @@ def _paginate(url, token, params=None):
         page += 1
     return results
 
+def _should_scan(path):
+    ext  = os.path.splitext(path)[1].lower()
+    base = os.path.basename(path)
+    if ext in SKIP_EXTENSIONS:
+        return False
+    return ext in AUDIT_EXTENSIONS or base in AUDIT_BASENAMES
 
-def fetch_recent_changes(token, owner='', scan_hours=1, full_scan=False):
-    since = (None if full_scan
-             else (datetime.now(timezone.utc) - timedelta(hours=scan_hours))
-             .strftime('%Y-%m-%dT%H:%M:%S+00:00'))
+def _find_head(token, owner, name):
+    """找 main/master 分支，返回 (branch, sha, author, message)。"""
+    for branch in MAIN_BRANCHES:
+        try:
+            commits = _get(f'{BASE}/repos/{owner}/{name}/commits',
+                           token, {'sha': branch, 'per_page': 1, 'page': 1})
+            if commits:
+                c = commits[0]
+                author  = c.get('commit', {}).get('author', {}).get('name', '')
+                message = c.get('commit', {}).get('message', '').split('\n')[0]
+                return branch, c['sha'], author, message
+        except Exception:
+            continue
+    return None, None, '', ''
+
+def _fetch_content(token, owner, name, path, ref):
+    """取单个文件当前内容，失败返回空字符串。"""
+    try:
+        data = _get(f'{BASE}/repos/{owner}/{name}/contents/{path}', token, {'ref': ref})
+        if data.get('encoding') == 'base64' and data.get('content'):
+            return base64.b64decode(data['content'].replace('\n', '')).decode('utf-8', errors='replace')
+    except Exception:
+        pass
+    return ''
+
+def test_connection(token, base_url=''):
+    try:
+        resp = requests.get(f'{BASE}/user', params={'access_token': token}, timeout=10)
+        resp.raise_for_status()
+        user = resp.json()
+        return None, user.get('login', 'unknown')
+    except Exception as e:
+        return str(e), None
+
+def fetch_recent_changes(token, owner='', since_iso=None):
     results = []
-
     try:
         if owner:
             try:
@@ -56,61 +87,103 @@ def fetch_recent_changes(token, owner='', scan_hours=1, full_scan=False):
         print(f'  [Gitee] 获取仓库失败: {e}')
         return []
 
-    MAIN_BRANCHES = ['main', 'master']
-
+    print(f'  [Gitee] 共 {len(repos)} 个仓库')
     for repo in repos:
         repo_owner = repo.get('owner', {}).get('login', '')
         repo_name  = repo.get('name', '')
         if not repo_owner or not repo_name:
             continue
-        base_commits = f'{BASE}/repos/{repo_owner}/{repo_name}/commits'
+        print(f'  [Gitee] {repo_owner}/{repo_name}')
+
+        branch, head_sha, author, message = _find_head(token, repo_owner, repo_name)
+        if not head_sha:
+            continue
+
+        if since_iso is None:
+            # 全量：只扫 main/master 当前状态
+            files = _fetch_full_tree(token, repo_owner, repo_name, head_sha)
+            if not files:
+                continue
+            results.append({
+                'source'      : 'gitee',
+                'repo'        : f'{repo_owner}/{repo_name}',
+                'commit_sha'  : head_sha,
+                'commit_url'  : f'https://gitee.com/{repo_owner}/{repo_name}/commit/{head_sha}',
+                'author'      : author,
+                'message'     : message,
+                'committed_at': '',
+                'files'       : files,
+            })
+        else:
+            # 增量：扫所有分支的新提交
+            try:
+                branches = _paginate(f'{BASE}/repos/{repo_owner}/{repo_name}/branches', token)
+            except Exception:
+                branches = [{'name': branch}]
+            for br in branches:
+                br_name = br['name']
+                files = _fetch_changed_files(token, repo_owner, repo_name, head_sha, br_name, since_iso)
+                if not files:
+                    continue
+                results.append({
+                    'source'      : 'gitee',
+                    'repo'        : f'{repo_owner}/{repo_name}({br_name})',
+                    'commit_sha'  : head_sha,
+                    'commit_url'  : f'https://gitee.com/{repo_owner}/{repo_name}/tree/{br_name}',
+                    'author'      : author,
+                    'message'     : f'[{br_name}] {message}',
+                    'committed_at': '',
+                    'files'       : files,
+                })
+
+    return results
+
+def _fetch_full_tree(token, owner, name, head_sha):
+    """全量：递归获取 main/master 所有代码文件的当前内容。"""
+    try:
+        tree = _get(f'{BASE}/repos/{owner}/{name}/git/trees/{head_sha}',
+                    token, {'recursive': 1})
+    except Exception as e:
+        print(f'    获取文件树失败: {e}')
+        return []
+
+    files = []
+    for item in tree.get('tree', []):
+        if item.get('type') != 'blob' or not _should_scan(item['path']):
+            continue
+        content = _fetch_content(token, owner, name, item['path'], head_sha)
+        if content.strip():
+            files.append({'filename': item['path'], 'patch': content, 'status': 'added'})
+    print(f'    全量: 共 {len(files)} 个待分析文件')
+    return files
+
+def _fetch_changed_files(token, owner, name, head_sha, branch, since_iso):
+    """增量：收集 since 以来变更文件名（去重），取当前最新内容。"""
+    try:
+        commits = _paginate(f'{BASE}/repos/{owner}/{name}/commits',
+                             token, {'sha': branch, 'since': since_iso})
+    except Exception:
+        return []
+
+    if not commits:
+        return []
+
+    changed = set()
+    for commit in commits:
+        sha = commit.get('sha', '')
+        if not sha:
+            continue
         try:
-            if full_scan:
-                # 全量扫描：只拉 main / master 分支，去重合并
-                seen, commits = set(), []
-                for branch in MAIN_BRANCHES:
-                    try:
-                        for c in _paginate(base_commits, token, {'sha': branch}):
-                            sha = c.get('sha', '')
-                            if sha and sha not in seen:
-                                seen.add(sha)
-                                commits.append(c)
-                    except Exception:
-                        pass
-            else:
-                commit_params = {'since': since} if since else {}
-                commits = _paginate(base_commits, token, commit_params)
+            detail = _get(f'{BASE}/repos/{owner}/{name}/commits/{sha}', token)
+            for f in detail.get('files', []):
+                if f.get('status') != 'removed' and _should_scan(f['filename']):
+                    changed.add(f['filename'])
         except Exception:
             continue
 
-        for commit in commits:
-            sha = commit.get('sha', '')
-            if not sha:
-                continue
-            try:
-                detail = _get(
-                    f'{BASE}/repos/{repo_owner}/{repo_name}/commits/{sha}', token)
-                raw_files = detail.get('files', [])
-            except Exception:
-                continue
-
-            author = commit.get('commit', {}).get('author', {})
-            results.append({
-                'source':       'gitee',
-                'repo':         f'{repo_owner}/{repo_name}',
-                'commit_sha':   sha,
-                'commit_url':   commit.get('html_url', ''),
-                'author':       author.get('name', ''),
-                'message':      commit.get('commit', {}).get('message', '').split('\n')[0],
-                'committed_at': author.get('date', ''),
-                'files': [
-                    {
-                        'filename': f['filename'],
-                        'patch':    f.get('patch', ''),
-                        'status':   f.get('status', 'modified'),
-                    }
-                    for f in raw_files if f.get('patch')
-                ],
-            })
-
-    return results
+    files = []
+    for path in changed:
+        content = _fetch_content(token, owner, name, path, head_sha)
+        if content.strip():
+            files.append({'filename': path, 'patch': content, 'status': 'modified'})
+    return files

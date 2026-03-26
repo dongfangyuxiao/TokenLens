@@ -7,38 +7,40 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;
-  background:#f0f2f5;color:#1a1a1a;display:flex;height:100vh;overflow:hidden}
+  background:#f0fdf4;color:#1a1a1a;display:flex;height:100vh;overflow:hidden;
+  background-image:radial-gradient(circle,rgba(74,222,128,.06) 1px,transparent 1px);
+  background-size:28px 28px}
 /* 侧边栏 */
 .sidebar{width:230px;
-  background:linear-gradient(180deg,#050f22 0%,#071428 60%,#050c1e 100%);
+  background:linear-gradient(180deg,#0f2818 0%,#132d1f 60%,#0a1d12 100%);
   display:flex;flex-direction:column;flex-shrink:0;
-  border-right:1px solid rgba(0,150,255,.12)}
+  border-right:1px solid rgba(34,197,94,.15)}
 nav{flex:1;padding:8px 0;overflow-y:auto}
 .nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px;
-  color:rgba(160,210,255,.55);cursor:pointer;font-size:13px;transition:.2s;
+  color:rgba(134,239,172,.55);cursor:pointer;font-size:13px;transition:.2s;
   border-left:2px solid transparent;position:relative}
-.nav-item:hover{color:rgba(200,235,255,.9);background:rgba(0,140,255,.07);
-  border-left-color:rgba(0,180,255,.3)}
-.nav-item.active{color:#38bdf8;background:rgba(0,140,255,.12);border-left-color:#38bdf8}
+.nav-item:hover{color:rgba(187,247,208,.9);background:rgba(34,197,94,.07);
+  border-left-color:rgba(74,222,128,.3)}
+.nav-item.active{color:#4ade80;background:rgba(34,197,94,.13);border-left-color:#4ade80}
 .nav-item.active::after{content:'';position:absolute;right:0;top:20%;bottom:20%;
-  width:2px;background:#38bdf8;border-radius:2px;opacity:.5}
+  width:2px;background:#4ade80;border-radius:2px;opacity:.5}
 .nav-item .icon{font-size:15px;width:20px;text-align:center}
 /* 主内容 */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .topbar{background:#fff;padding:0 24px;height:54px;display:flex;align-items:center;
-  justify-content:space-between;border-bottom:1px solid #eef0f5;flex-shrink:0;
-  box-shadow:0 1px 8px rgba(0,60,180,.06)}
-.page-title{font-size:15px;font-weight:700;color:#0f2044;letter-spacing:.03em}
+  justify-content:space-between;border-bottom:1px solid #dcfce7;flex-shrink:0;
+  box-shadow:0 1px 8px rgba(0,80,30,.06)}
+.page-title{font-size:15px;font-weight:700;color:#14532d;letter-spacing:.03em}
 .topbar-right{display:flex;align-items:center;gap:12px}
 .status-dot{width:8px;height:8px;border-radius:50%;background:#52c41a;display:inline-block}
 .status-dot.idle{background:#52c41a}
-.status-dot.running{background:#1890ff;animation:pulse 1s infinite}
+.status-dot.running{background:#16a34a;animation:pulse 1s infinite}
 .status-dot.paused{background:#d46b08}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;
   cursor:pointer;transition:.15s}
 .btn:active{opacity:.8}
-.btn-primary{background:#1677ff;color:#fff}
+.btn-primary{background:#16a34a;color:#fff}
 .btn-danger{background:#ff4d4f;color:#fff}
 .btn-default{background:#fff;color:#555;border:1px solid #d9d9d9}
 .btn-sm{padding:5px 12px;font-size:12px}
@@ -64,14 +66,14 @@ label{font-size:12px;color:#888;font-weight:600}
 input,select,textarea{border:1px solid #e8e8e8;border-radius:8px;padding:9px 12px;
   font-size:13px;color:#1a1a1a;outline:none;font-family:inherit;
   transition:border-color .2s;width:100%}
-input:focus,select:focus,textarea:focus{border-color:#1677ff}
+input:focus,select:focus,textarea:focus{border-color:#16a34a}
 textarea{resize:vertical;min-height:80px}
 /* 统计卡片 */
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
 .stat-card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .stat-num{font-size:28px;font-weight:800;line-height:1}
 .stat-label{font-size:12px;color:#888;margin-top:6px}
-.stat-card.total .stat-num{color:#1677ff}
+.stat-card.total .stat-num{color:#16a34a}
 .stat-card.critical .stat-num{color:#ff4d4f}
 .stat-card.high .stat-num{color:#fa8c16}
 .stat-card.medium .stat-num{color:#d4b106}
@@ -82,23 +84,110 @@ textarea{resize:vertical;min-height:80px}
 .badge-medium{background:#feffe6;color:#d4b106}
 .badge-low{background:#f6ffed;color:#52c41a}
 .badge-done{background:#f6ffed;color:#52c41a}
-.badge-running{background:#e6f4ff;color:#1677ff}
+.badge-running{background:#dcfce7;color:#16a34a}
 .badge-error{background:#fff1f0;color:#ff4d4f}
 .badge-stopped{background:#f5f5f5;color:#888}
 .badge-paused{background:#fff7e6;color:#d46b08}
+.badge-interrupted{background:#fff1f0;color:#cf1322}
 .badge-github{background:#f0f0f0;color:#333}
 .badge-gitlab{background:#fff0f6;color:#c41d7f}
 .badge-bitbucket{background:#e6f0ff;color:#0052cc}
 .badge-gitee{background:#fff2e8;color:#d4380d}
 .badge-tgit{background:#f0fff0;color:#237804}
 .badge-codeup{background:#fff7e6;color:#d46b08}
+/* ── 深色主题 ── */
+body.dark{background:#0f1117;color:#e2e8f0}
+body.dark .sidebar{background:linear-gradient(180deg,#0a1f10 0%,#0d2414 60%,#071509 100%)}
+body.dark .topbar{background:#151821;border-color:#2a3042;box-shadow:0 1px 8px rgba(0,0,0,.3)}
+body.dark .page-title{color:#e2e8f0}
+body.dark .card{background:#1e2130;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+body.dark .card-title{color:#e2e8f0}
+body.dark .stat-card{background:#1e2130;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+body.dark .stat-label{color:#64748b}
+body.dark th{background:#252836;color:#64748b;border-color:#2a3042}
+body.dark td{border-color:#2a3042;color:#e2e8f0}
+body.dark tr:hover td{background:#252836}
+body.dark input,body.dark select,body.dark textarea{
+  background:#252836;border-color:#3d4a5c;color:#e2e8f0}
+body.dark input:focus,body.dark select:focus,body.dark textarea:focus{border-color:#4ade80}
+body.dark label{color:#94a3b8}
+body.dark .btn-default{background:#252836;color:#cbd5e1;border-color:#3d4a5c}
+body.dark .btn-default:hover{background:#2d3748}
+body.dark .modal{background:#1e2130;color:#e2e8f0}
+body.dark .modal-title{color:#e2e8f0}
+body.dark .finding-item{border-color:#2a3042}
+body.dark .finding-item .fi-file code{background:#2d1f4e;color:#a78bfa}
+body.dark .fi-group-title{color:#94a3b8;border-color:#2a3042}
+body.dark .fi-desc{color:#cbd5e1}
+body.dark .fi-rec{background:#1a2744;color:#60a5fa}
+body.dark .log-container{background:#0d1117}
+body.dark .sev-tab{background:#252836;color:#94a3b8;border-color:#3d4a5c}
+body.dark .empty{color:#475569}
+body.dark #testConnResult.ok{background:#052e16;color:#4ade80}
+body.dark #testConnResult.err{background:#450a0a;color:#f87171}
+body.dark #llmProfileForm,body.dark #addScheduleForm-poison,
+body.dark #addScheduleForm-incremental_audit,body.dark #addScheduleForm-full_audit{
+  background:#252836;border-color:#3d4a5c}
+/* ── 漏洞详情弹窗 ── */
+.fd-responsible{border-radius:10px;padding:14px 18px;margin-bottom:18px;
+  display:flex;align-items:center;gap:14px}
+.fd-responsible.owner{background:#f0fdf4;border:1px solid #bbf7d0}
+.fd-responsible.author{background:#f8fafc;border:1px solid #e2e8f0}
+body.dark .fd-responsible.owner{background:#052e16;border-color:#166534}
+body.dark .fd-responsible.author{background:#1e2130;border-color:#2a3042}
+.fd-responsible .fd-avatar{width:40px;height:40px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.fd-responsible.owner .fd-avatar{background:#dcfce7}
+.fd-responsible.author .fd-avatar{background:#e2e8f0}
+body.dark .fd-responsible.owner .fd-avatar{background:#14532d}
+body.dark .fd-responsible.author .fd-avatar{background:#2d3748}
+.fd-responsible .fd-person-name{font-size:15px;font-weight:700;color:#1a1a1a;line-height:1.3}
+body.dark .fd-responsible .fd-person-name{color:#e2e8f0}
+.fd-responsible .fd-person-sub{font-size:12px;color:#888;margin-top:2px}
+body.dark .fd-responsible .fd-person-sub{color:#64748b}
+.fd-responsible .fd-person-tag{font-size:11px;padding:2px 8px;border-radius:10px;
+  font-weight:600;margin-top:4px;display:inline-block}
+.fd-responsible.owner .fd-person-tag{background:#dcfce7;color:#15803d}
+.fd-responsible.author .fd-person-tag{background:#f1f5f9;color:#64748b}
+body.dark .fd-responsible.owner .fd-person-tag{background:#14532d;color:#4ade80}
+body.dark .fd-responsible.author .fd-person-tag{background:#2d3748;color:#94a3b8}
+.fd-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.fd-meta-item{background:#f9fafb;border-radius:8px;padding:10px 14px}
+body.dark .fd-meta-item{background:#252836}
+.fd-meta-label{font-size:11px;color:#888;font-weight:600;text-transform:uppercase;
+  letter-spacing:.05em;margin-bottom:3px}
+body.dark .fd-meta-label{color:#64748b}
+.fd-meta-value{font-size:13px;color:#1a1a1a;word-break:break-all}
+body.dark .fd-meta-value{color:#e2e8f0}
+.fd-section-title{font-size:12px;font-weight:700;color:#888;text-transform:uppercase;
+  letter-spacing:.06em;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid #f0f0f0;
+  display:flex;align-items:center;gap:6px}
+body.dark .fd-section-title{color:#64748b;border-color:#2a3042}
+.fd-desc{font-size:13px;color:#444;line-height:1.75;white-space:pre-wrap}
+body.dark .fd-desc{color:#cbd5e1}
+.fd-rec{font-size:13px;color:#16a34a;background:#f0fdf4;padding:12px 16px;
+  border-radius:8px;line-height:1.75;white-space:pre-wrap}
+body.dark .fd-rec{background:#1a2744;color:#60a5fa}
+.fd-status-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* ── 扫描触发弹窗 ── */
+.scan-modal-icon{font-size:52px;margin-bottom:12px}
+.scan-modal-title{font-size:20px;font-weight:800;margin-bottom:8px}
+.scan-modal-desc{font-size:13px;color:#888;line-height:1.6;margin-bottom:20px}
+body.dark .scan-modal-desc{color:#64748b}
+.scan-modal-body{text-align:center;padding:8px 0 4px}
+/* ── 主题/语言按钮 ── */
+.btn-icon{padding:6px 10px;border-radius:8px;border:1px solid #e8e8e8;background:#fff;
+  font-size:14px;cursor:pointer;transition:.15s;line-height:1;color:#555}
+.btn-icon:hover{background:#f5f5f5}
+body.dark .btn-icon{background:#252836;border-color:#3d4a5c;color:#94a3b8}
+body.dark .btn-icon:hover{background:#2d3748}
 /* 开关 */
 .toggle{position:relative;width:40px;height:22px;display:inline-block}
 .toggle input{opacity:0;width:0;height:0}
 .toggle-slider{position:absolute;inset:0;background:#ccc;border-radius:22px;cursor:pointer;transition:.3s}
 .toggle-slider:before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;
   background:#fff;border-radius:50%;transition:.3s}
-.toggle input:checked + .toggle-slider{background:#1677ff}
+.toggle input:checked + .toggle-slider{background:#16a34a}
 .toggle input:checked + .toggle-slider:before{transform:translateX(18px)}
 /* 弹窗 */
 .modal-mask{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;
@@ -123,7 +212,7 @@ textarea{resize:vertical;min-height:80px}
 .finding-item .fi-header{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
 .finding-item .fi-file{font-size:12px;color:#888;margin-bottom:4px}
 .finding-item .fi-desc{font-size:13px;color:#444;line-height:1.6;margin-bottom:6px}
-.finding-item .fi-rec{font-size:12px;color:#1677ff;background:#f0f5ff;padding:8px 12px;border-radius:6px}
+.finding-item .fi-rec{font-size:12px;color:#16a34a;background:#f0fdf4;padding:8px 12px;border-radius:6px}
 .finding-item .fi-commit{font-size:11px;color:#aaa;margin-top:6px}
 .finding-item .fi-status{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
 .fi-group-title{font-size:13px;font-weight:700;color:#444;margin:14px 0 8px;
@@ -133,13 +222,13 @@ textarea{resize:vertical;min-height:80px}
 #findings-filter{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
 .sev-tab{padding:4px 12px;border:1px solid #e8e8e8;border-radius:16px;font-size:12px;
   font-weight:600;cursor:pointer;background:#fff;color:#666;transition:.15s}
-.sev-tab.active{border-color:#1677ff;background:#e6f4ff;color:#1677ff}
+.sev-tab.active{border-color:#16a34a;background:#dcfce7;color:#16a34a}
 .sev-tab.critical.active{border-color:#ff4d4f;background:#fff1f0;color:#ff4d4f}
 .sev-tab.high.active{border-color:#fa8c16;background:#fff7e6;color:#fa8c16}
 .sev-tab.medium.active{border-color:#d4b106;background:#feffe6;color:#d4b106}
 .sev-tab.low.active{border-color:#52c41a;background:#f6ffed;color:#52c41a}
 /* 漏洞状态徽章 */
-.badge-status-new{background:#e6f4ff;color:#1677ff}
+.badge-status-new{background:#dcfce7;color:#16a34a}
 .badge-status-fixing{background:#fff7e6;color:#d46b08}
 .badge-status-fixed{background:#f6ffed;color:#389e0d}
 .badge-status-wont_fix{background:#f5f5f5;color:#888}
@@ -157,7 +246,7 @@ textarea{resize:vertical;min-height:80px}
 /* ── 登录页 ── */
 #login-page{display:none;position:fixed;inset:0;z-index:999;
   align-items:center;justify-content:center;overflow:hidden;
-  background:linear-gradient(135deg,#050c1a 0%,#0b1a36 55%,#051020 100%)}
+  background:linear-gradient(145deg,#fce7f3 0%,#fff7ed 45%,#ecfdf5 100%)}
 #login-page.show{display:flex}
 
 /* ── 春意背景文字 ── */
@@ -170,9 +259,9 @@ textarea{resize:vertical;min-height:80px}
   font-size:clamp(36px,5vw,80px);font-weight:900;letter-spacing:.25em;
   line-height:1;user-select:none;
   font-family:'PingFang SC','Noto Serif SC','Hiragino Serif','Source Han Serif','Microsoft YaHei',serif;
-  background:linear-gradient(180deg,#f9c784 0%,#ffb7c5 40%,#e8a0c0 68%,#a8d8b9 100%);
+  background:linear-gradient(180deg,#f9a8d4 0%,#fb923c 45%,#4ade80 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  filter:drop-shadow(0 2px 16px rgba(255,140,180,.38)) drop-shadow(0 0 32px rgba(255,180,120,.25))}
+  filter:drop-shadow(0 2px 20px rgba(249,168,212,.45)) drop-shadow(0 0 32px rgba(251,146,60,.2))}
 #login-page .login-bg-text span:first-child{
   left:6vw;transform:translateY(-50%);
   animation:spring-float1 7s ease-in-out infinite}
@@ -180,30 +269,31 @@ textarea{resize:vertical;min-height:80px}
   right:6vw;transform:translateY(-50%);
   animation:spring-float2 7s ease-in-out infinite;animation-delay:.9s}
 @keyframes spring-float1{
-  0%,100%{opacity:.58;transform:translateY(-50%) translateX(0)}
-  50%{opacity:.75;transform:translateY(-50%) translateX(-7px)}}
+  0%,100%{opacity:.45;transform:translateY(-50%) translateX(0)}
+  50%{opacity:.62;transform:translateY(-50%) translateX(-7px)}}
 @keyframes spring-float2{
-  0%,100%{opacity:.52;transform:translateY(-50%) translateX(0)}
-  50%{opacity:.68;transform:translateY(-50%) translateX(7px)}}
+  0%,100%{opacity:.40;transform:translateY(-50%) translateX(0)}
+  50%{opacity:.55;transform:translateY(-50%) translateX(7px)}}
 
-/* 电路网格叠加 */
+/* 樱花瓣纹底纹 */
 #login-page::before{content:'';position:absolute;inset:0;z-index:0;
   background-image:
-    linear-gradient(rgba(0,140,255,.03) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(0,140,255,.03) 1px,transparent 1px);
-  background-size:44px 44px}
+    radial-gradient(circle,rgba(249,168,212,.12) 1px,transparent 1px),
+    radial-gradient(circle,rgba(251,146,60,.07) 1px,transparent 1px);
+  background-size:32px 32px,56px 56px;
+  background-position:0 0,16px 16px}
 
 /* 扫描线 */
-#login-page::after{content:'';position:absolute;left:0;right:0;height:1px;z-index:0;
-  background:linear-gradient(90deg,transparent,rgba(255,160,200,.4),rgba(255,200,120,.3),transparent);
-  animation:scanline 6s linear infinite;top:-1px}
-@keyframes scanline{0%{top:-1px}100%{top:100%}}
+#login-page::after{content:'';position:absolute;left:0;right:0;height:2px;z-index:0;
+  background:linear-gradient(90deg,transparent,rgba(249,168,212,.5),rgba(251,146,60,.3),transparent);
+  animation:scanline 8s linear infinite;top:-2px;opacity:.6}
+@keyframes scanline{0%{top:-2px}100%{top:100%}}
 
 /* 角落光晕 —— 春色 */
-.login-glow{position:absolute;border-radius:50%;pointer-events:none;z-index:0;filter:blur(70px)}
-.login-glow-a{width:420px;height:420px;background:rgba(255,140,180,.1);top:-100px;right:-80px}
-.login-glow-b{width:300px;height:300px;background:rgba(120,220,160,.09);bottom:-70px;left:-50px}
-.login-glow-c{width:200px;height:200px;background:rgba(255,190,100,.07);top:30%;left:-60px}
+.login-glow{position:absolute;border-radius:50%;pointer-events:none;z-index:0;filter:blur(80px)}
+.login-glow-a{width:480px;height:480px;background:rgba(249,168,212,.22);top:-120px;right:-100px}
+.login-glow-b{width:340px;height:340px;background:rgba(251,191,36,.14);bottom:-80px;left:-60px}
+.login-glow-c{width:260px;height:260px;background:rgba(134,239,172,.12);top:25%;left:-70px}
 
 /* ── 飘落花瓣 ── */
 .petal{position:absolute;pointer-events:none;z-index:0;opacity:0;
@@ -219,50 +309,51 @@ textarea{resize:vertical;min-height:80px}
 
 /* 登录卡片 */
 .login-box{position:relative;z-index:1;
-  background:rgba(255,255,255,.04);
-  border:1px solid rgba(0,180,255,.18);
+  background:rgba(255,255,255,.82);
+  border:1px solid rgba(249,168,212,.35);
   border-radius:20px;padding:44px 40px;width:400px;
-  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
-  box-shadow:0 0 0 1px rgba(0,180,255,.06),0 0 60px rgba(0,100,255,.12),0 24px 64px rgba(0,0,0,.55)}
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 0 0 1px rgba(249,168,212,.12),0 8px 40px rgba(219,112,147,.12),0 24px 64px rgba(180,80,100,.08)}
 
-/* 顶部扫描线装饰 */
-.login-box::before{content:'';position:absolute;top:0;left:12%;right:12%;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(0,200,255,.7),transparent);border-radius:1px}
+/* 顶部花瓣渐变装饰线 */
+.login-box::before{content:'';position:absolute;top:0;left:12%;right:12%;height:2px;
+  background:linear-gradient(90deg,transparent,rgba(249,168,212,.8),rgba(251,146,60,.5),transparent);
+  border-radius:2px}
 
 .login-logo{text-align:center;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:12px}
 .login-logo-text{font-size:20px;font-weight:800;
-  background:linear-gradient(135deg,#e8f4ff 0%,#7dd3fc 50%,#38bdf8 100%);
+  background:linear-gradient(135deg,#db2777 0%,#ea580c 50%,#16a34a 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
   letter-spacing:.04em}
-.login-sub{text-align:center;font-size:12px;color:rgba(150,200,255,.55);
+.login-sub{text-align:center;font-size:12px;color:rgba(120,80,100,.55);
   margin-bottom:30px;letter-spacing:.1em}
 .login-box .form-group{margin-bottom:18px}
-.login-box label{font-size:12px;color:rgba(150,200,255,.7);font-weight:600;
+.login-box label{font-size:12px;color:rgba(100,60,80,.7);font-weight:600;
   display:block;margin-bottom:7px;letter-spacing:.05em}
-.login-box input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(0,180,255,.2);
-  color:#e8f4ff;border-radius:10px;padding:11px 14px;font-size:13px;
+.login-box input{width:100%;background:rgba(255,255,255,.7);border:1px solid rgba(249,168,212,.4);
+  color:#3d1a2e;border-radius:10px;padding:11px 14px;font-size:13px;
   transition:border-color .2s,box-shadow .2s}
-.login-box input::placeholder{color:rgba(150,200,255,.3)}
-.login-box input:focus{border-color:rgba(0,200,255,.6);
-  box-shadow:0 0 0 3px rgba(0,180,255,.12);outline:none;background:rgba(255,255,255,.08)}
-.login-err{color:#ff6b6b;font-size:12px;margin-top:10px;text-align:center;min-height:18px}
+.login-box input::placeholder{color:rgba(150,100,120,.35)}
+.login-box input:focus{border-color:rgba(219,39,119,.45);
+  box-shadow:0 0 0 3px rgba(249,168,212,.2);outline:none;background:rgba(255,255,255,.9)}
+.login-err{color:#e11d48;font-size:12px;margin-top:10px;text-align:center;min-height:18px}
 .btn-login{width:100%;padding:12px;font-size:14px;font-weight:700;margin-top:8px;
-  background:linear-gradient(135deg,#0052cc,#0ea5e9);border:none;border-radius:10px;
+  background:linear-gradient(135deg,#db2777,#ea580c);border:none;border-radius:10px;
   color:#fff;cursor:pointer;letter-spacing:.08em;
-  box-shadow:0 4px 20px rgba(0,120,255,.35);transition:.2s}
-.btn-login:hover{box-shadow:0 6px 28px rgba(0,150,255,.5);transform:translateY(-1px)}
+  box-shadow:0 4px 20px rgba(219,39,119,.28);transition:.2s}
+.btn-login:hover{box-shadow:0 6px 28px rgba(219,39,119,.4);transform:translateY(-1px)}
 .btn-login:active{transform:translateY(0);opacity:.9}
 
 /* ── 侧边栏 Logo ── */
-.logo{padding:18px 16px;border-bottom:1px solid rgba(0,180,255,.1);
+.logo{padding:18px 16px;border-bottom:1px solid rgba(74,222,128,.12);
   display:flex;align-items:center;gap:10px;cursor:default;
-  background:linear-gradient(135deg,rgba(0,60,140,.6),rgba(0,30,80,.4))}
+  background:linear-gradient(135deg,rgba(0,80,30,.55),rgba(0,40,15,.4))}
 .logo-name{display:flex;flex-direction:column;line-height:1.2}
 .logo-name-main{font-size:14px;font-weight:800;
-  background:linear-gradient(135deg,#7dd3fc,#38bdf8,#0ea5e9);
+  background:linear-gradient(135deg,#86efac,#4ade80,#22c55e);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
   letter-spacing:.06em}
-.logo-name-sub{font-size:10px;color:rgba(100,180,255,.5);letter-spacing:.12em;margin-top:1px}
+.logo-name-sub{font-size:10px;color:rgba(134,239,172,.5);letter-spacing:.12em;margin-top:1px}
 </style>
 </head>
 <body>
@@ -284,8 +375,8 @@ textarea{resize:vertical;min-height:80px}
       <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#38bdf8"/>
-            <stop offset="100%" stop-color="#0052cc"/>
+            <stop offset="0%" stop-color="#f9a8d4"/>
+            <stop offset="100%" stop-color="#ea580c"/>
           </linearGradient>
           <filter id="glow-l" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
@@ -299,17 +390,17 @@ textarea{resize:vertical;min-height:80px}
           fill="none" stroke="url(#hg)" stroke-width="1.5" filter="url(#glow-l)"/>
         <!-- 内盾形 -->
         <path d="M19 9 L28 13.5 L28 21 Q28 28 19 31.5 Q10 28 10 21 L10 13.5 Z"
-          fill="none" stroke="#38bdf8" stroke-width="1.2" opacity=".7"/>
+          fill="none" stroke="#f9a8d4" stroke-width="1.2" opacity=".7"/>
         <!-- 代码符号 -->
         <text x="19" y="25" text-anchor="middle" font-size="10" font-weight="900"
-          fill="#7dd3fc" font-family="monospace" filter="url(#glow-l)">&lt;/&gt;</text>
+          fill="#db2777" font-family="monospace" filter="url(#glow-l)">&lt;/&gt;</text>
         <!-- 角落小圆点装饰 -->
-        <circle cx="19" cy="2" r="1.5" fill="#38bdf8" opacity=".8"/>
-        <circle cx="34" cy="10.5" r="1.5" fill="#38bdf8" opacity=".6"/>
-        <circle cx="34" cy="27.5" r="1.5" fill="#38bdf8" opacity=".6"/>
-        <circle cx="19" cy="36" r="1.5" fill="#38bdf8" opacity=".8"/>
-        <circle cx="4" cy="27.5" r="1.5" fill="#38bdf8" opacity=".6"/>
-        <circle cx="4" cy="10.5" r="1.5" fill="#38bdf8" opacity=".6"/>
+        <circle cx="19" cy="2" r="1.5" fill="#f9a8d4" opacity=".8"/>
+        <circle cx="34" cy="10.5" r="1.5" fill="#fb923c" opacity=".6"/>
+        <circle cx="34" cy="27.5" r="1.5" fill="#fb923c" opacity=".6"/>
+        <circle cx="19" cy="36" r="1.5" fill="#f9a8d4" opacity=".8"/>
+        <circle cx="4" cy="27.5" r="1.5" fill="#fb923c" opacity=".6"/>
+        <circle cx="4" cy="10.5" r="1.5" fill="#fb923c" opacity=".6"/>
       </svg>
       <span class="login-logo-text">春静企业代码安全平台</span>
     </div>
@@ -335,18 +426,18 @@ textarea{resize:vertical;min-height:80px}
     <svg width="28" height="28" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#38bdf8"/>
-          <stop offset="100%" stop-color="#0052cc"/>
+          <stop offset="0%" stop-color="#4ade80"/>
+          <stop offset="100%" stop-color="#16a34a"/>
         </linearGradient>
       </defs>
       <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
         fill="url(#sg)" opacity=".22"/>
       <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
-        fill="none" stroke="#38bdf8" stroke-width="1.5"/>
+        fill="none" stroke="#4ade80" stroke-width="1.5"/>
       <path d="M19 9 L28 13.5 L28 21 Q28 28 19 31.5 Q10 28 10 21 L10 13.5 Z"
-        fill="none" stroke="#7dd3fc" stroke-width="1.2" opacity=".8"/>
+        fill="none" stroke="#86efac" stroke-width="1.2" opacity=".8"/>
       <text x="19" y="25" text-anchor="middle" font-size="10" font-weight="900"
-        fill="#7dd3fc" font-family="monospace">&lt;/&gt;</text>
+        fill="#86efac" font-family="monospace">&lt;/&gt;</text>
     </svg>
     <div class="logo-name">
       <span class="logo-name-main">春静安全</span>
@@ -375,12 +466,14 @@ textarea{resize:vertical;min-height:80px}
     <div class="topbar-right">
       <span id="statusText" style="font-size:13px;color:#888"></span>
       <span class="status-dot" id="statusDot"></span>
-      <button class="btn btn-default" onclick="triggerScan('poison')" id="poisonBtn">投毒检测</button>
-      <button class="btn btn-primary" onclick="triggerScan('incremental_audit')" id="scanBtn">增量审计</button>
-      <button class="btn btn-default" onclick="triggerScan('full_audit')" id="fullScanBtn">全量审计</button>
-      <button class="btn btn-default" onclick="pauseResumeScan()" id="pauseBtn" style="display:none">暂停</button>
-      <button class="btn btn-default" onclick="stopScan()" id="stopBtn" style="display:none;color:#ff4d4f;border-color:#ff4d4f">停止</button>
-      <button class="btn btn-default btn-sm" onclick="doLogout()" style="margin-left:4px">退出</button>
+      <button class="btn-icon" id="themeBtn" onclick="toggleTheme()" title="切换主题">🌙</button>
+      <button class="btn-icon" id="langBtn" onclick="toggleLang()" title="切换语言" style="font-size:12px;font-weight:700;letter-spacing:.03em">中</button>
+      <button class="btn btn-default" onclick="triggerScan('poison')" id="poisonBtn" data-i18n="nav.poison">投毒检测</button>
+      <button class="btn btn-primary" onclick="triggerScan('incremental_audit')" id="scanBtn" data-i18n="nav.inc">增量审计</button>
+      <button class="btn btn-default" onclick="triggerScan('full_audit')" id="fullScanBtn" data-i18n="nav.full">全量审计</button>
+      <button class="btn btn-default" onclick="pauseResumeScan()" id="pauseBtn" style="display:none" data-i18n="topbar.pause">暂停</button>
+      <button class="btn btn-default" onclick="stopScan()" id="stopBtn" style="display:none;color:#ff4d4f;border-color:#ff4d4f" data-i18n="topbar.stop">停止</button>
+      <button class="btn btn-default btn-sm" onclick="doLogout()" style="margin-left:4px" data-i18n="topbar.logout">退出</button>
     </div>
   </div>
 
@@ -398,7 +491,7 @@ textarea{resize:vertical;min-height:80px}
         <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;font-size:13px">
           <div>
             <span style="color:#888;margin-right:4px">🛡️ 投毒检测：</span>
-            <span id="dash-poison-summary" style="color:#1677ff;font-weight:600">—</span>
+            <span id="dash-poison-summary" style="color:#16a34a;font-weight:600">—</span>
           </div>
           <div>
             <span style="color:#888;margin-right:4px">🔍 增量代码审计：</span>
@@ -459,7 +552,7 @@ textarea{resize:vertical;min-height:80px}
         <!-- 模式切换标签 -->
         <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:2px solid #f0f0f0">
           <button id="ia_tab_paste" onclick="iaTab('paste')"
-            style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;color:#1677ff;border-bottom:2px solid #1677ff;margin-bottom:-2px">
+            style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;color:#16a34a;border-bottom:2px solid #16a34a;margin-bottom:-2px">
             📋 粘贴代码
           </button>
           <button id="ia_tab_upload" onclick="iaTab('upload')"
@@ -591,7 +684,9 @@ textarea{resize:vertical;min-height:80px}
         <div style="font-size:12px;color:#888;margin-bottom:12px" id="llmProviderHint"></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="saveLLM()">保存配置</button>
+          <button class="btn btn-default" onclick="testLLM()">测试连接</button>
           <span id="llmSavedInfo" style="font-size:12px;color:#888"></span>
+          <span id="llmTestResult" style="font-size:12px"></span>
         </div>
 
         <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0">
@@ -607,6 +702,68 @@ textarea{resize:vertical;min-height:80px}
             </div>
           </div>
           <button class="btn btn-default btn-sm" onclick="saveLegacyLLM()">保存旧版 Key</button>
+        </div>
+      </div>
+
+      <!-- AI 配置列表 -->
+      <div class="card">
+        <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span>AI 配置列表</span>
+          <button class="btn btn-primary btn-sm" onclick="showProfileForm()">+ 添加配置</button>
+        </div>
+        <div style="font-size:13px;color:#888;margin-bottom:14px">
+          可配置多个 AI 模型，手动扫描和定时任务可独立选择使用哪个配置。
+        </div>
+        <div id="llmProfileList"><div class="empty" style="padding:12px 0">暂无配置，点击右上角添加</div></div>
+
+        <!-- 添加/编辑表单 -->
+        <div id="llmProfileForm" style="display:none;margin-top:14px;padding:14px;background:#f9f9f9;border-radius:8px;border:1px solid #e8e8e8">
+          <div style="font-size:13px;font-weight:600;margin-bottom:12px" id="llmProfileFormTitle">添加 AI 配置</div>
+          <input type="hidden" id="editProfileId">
+          <div class="form-row col2">
+            <div class="form-group">
+              <label>配置名称</label>
+              <input id="profileName" placeholder="如：GPT-4o 主力、DeepSeek 备用">
+            </div>
+            <div class="form-group">
+              <label>提供商</label>
+              <select id="profileProvider">
+                <option value="">-- 请选择 --</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="qwen">通义千问 (Qwen)</option>
+                <option value="zhipu">智谱 AI (Zhipu)</option>
+                <option value="moonshot">月之暗面 (Moonshot)</option>
+                <option value="doubao">字节豆包 (Doubao)</option>
+                <option value="minimax">MiniMax</option>
+                <option value="baidu">百度文心 (Baidu)</option>
+                <option value="gemini">Google Gemini</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic Claude</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="ollama">Ollama（本地）</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row col2">
+            <div class="form-group">
+              <label>模型名称（留空使用默认）</label>
+              <input id="profileModel" placeholder="如：gpt-4o、deepseek-chat">
+            </div>
+            <div class="form-group">
+              <label>API Key</label>
+              <input id="profileApiKey" type="password" placeholder="编辑时留空保持不变">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>自定义 Base URL（私有部署/中转时填写）</label>
+              <input id="profileBaseUrl" placeholder="如：http://localhost:11434/v1">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary btn-sm" onclick="saveProfile()">保存</button>
+            <button class="btn btn-default btn-sm" onclick="hideProfileForm()">取消</button>
+          </div>
         </div>
       </div>
     </div>
@@ -737,12 +894,18 @@ textarea{resize:vertical;min-height:80px}
               <label style="font-size:12px">备注（可选）</label>
               <input id="newSched-poison-label" placeholder="如：每小时检测">
             </div>
+            <div class="form-group" style="margin:0;min-width:130px">
+              <label style="font-size:12px">AI 模型</label>
+              <select id="newSched-poison-llm" style="width:130px">
+                <option value="">全局配置</option>
+              </select>
+            </div>
             <div style="display:flex;gap:6px;padding-bottom:1px">
               <button class="btn btn-primary btn-sm" onclick="submitAddSchedule('poison')">确认添加</button>
               <button class="btn btn-default btn-sm" onclick="hideAddScheduleForm('poison')">取消</button>
             </div>
           </div>
-          <div id="addSchedPreview-poison" style="font-size:12px;color:#1677ff;margin-top:8px"></div>
+          <div id="addSchedPreview-poison" style="font-size:12px;color:#16a34a;margin-top:8px"></div>
         </div>
       </div>
 
@@ -785,6 +948,12 @@ textarea{resize:vertical;min-height:80px}
             <div class="form-group" style="margin:0;flex:1;min-width:120px">
               <label style="font-size:12px">备注（可选）</label>
               <input id="newSched-incremental_audit-label" placeholder="如：凌晨审计">
+            </div>
+            <div class="form-group" style="margin:0;min-width:130px">
+              <label style="font-size:12px">AI 模型</label>
+              <select id="newSched-incremental_audit-llm" style="width:130px">
+                <option value="">全局配置</option>
+              </select>
             </div>
             <div style="display:flex;gap:6px;padding-bottom:1px">
               <button class="btn btn-primary btn-sm" onclick="submitAddSchedule('incremental_audit')">确认添加</button>
@@ -834,6 +1003,12 @@ textarea{resize:vertical;min-height:80px}
             <div class="form-group" style="margin:0;flex:1;min-width:120px">
               <label style="font-size:12px">备注（可选）</label>
               <input id="newSched-full_audit-label" placeholder="如：周六全量">
+            </div>
+            <div class="form-group" style="margin:0;min-width:130px">
+              <label style="font-size:12px">AI 模型</label>
+              <select id="newSched-full_audit-llm" style="width:130px">
+                <option value="">全局配置</option>
+              </select>
             </div>
             <div style="display:flex;gap:6px;padding-bottom:1px">
               <button class="btn btn-primary btn-sm" onclick="submitAddSchedule('full_audit')">确认添加</button>
@@ -1234,6 +1409,37 @@ textarea{resize:vertical;min-height:80px}
   </div>
 </div>
 
+<!-- 漏洞详情弹窗 -->
+<div class="modal-mask" id="findingDetailModal" onclick="if(event.target===this)closeModal('findingDetailModal')">
+  <div class="modal modal-wide" style="max-height:92vh;overflow-y:auto">
+    <div id="fdContent"><div class="empty">加载中…</div></div>
+    <div class="modal-footer">
+      <button class="btn btn-default" onclick="closeModal('findingDetailModal')">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 扫描触发弹窗 -->
+<div class="modal-mask" id="scanTriggerModal" onclick="if(event.target===this)closeScanModal()">
+  <div class="modal" style="width:460px">
+    <div class="scan-modal-body">
+      <div class="scan-modal-icon" id="scanModalIcon">🔍</div>
+      <div class="scan-modal-title" id="scanModalTitle"></div>
+      <div class="scan-modal-desc" id="scanModalDesc"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:20px">
+      <label data-i18n="modal.selectAI">选择 AI 模型</label>
+      <select id="scanModalLlm" style="width:100%">
+        <option value="" data-i18n="modal.globalAI">全局 AI 配置</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-default" onclick="closeScanModal()" data-i18n="btn.cancel">取消</button>
+      <button class="btn btn-primary" id="scanModalConfirm" onclick="doTriggerScan()" data-i18n="btn.startScan">开始扫描</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 </div><!-- /#app -->
 
@@ -1311,7 +1517,13 @@ function nav(page) {
   document.querySelectorAll('.nav-item').forEach((el, i) => {
     el.classList.toggle('active', PAGES[i] === page);
   });
-  document.getElementById('pageTitle').textContent = PAGE_TITLES[page];
+  const PAGE_TITLES_NOW = {
+    dashboard: t('nav.dashboard'), accounts: t('nav.accounts'), repoowners: t('nav.repoowners'),
+    channels: t('nav.channels'), instant: t('nav.instant'), ai: t('nav.ai'),
+    history: t('nav.history'), stats: t('nav.stats'), prompts: t('nav.prompts'),
+    whitelist: t('nav.whitelist'), users: t('nav.users'), settings: t('nav.settings'),
+  };
+  document.getElementById('pageTitle').textContent = PAGE_TITLES_NOW[page] || PAGE_TITLES[page];
   loadPage(page);
 }
 
@@ -1320,7 +1532,7 @@ function loadPage(p) {
   if (p === 'accounts')   { loadAccounts(); }
   if (p === 'repoowners') { loadRepoOwners(); }
   if (p === 'channels')   { loadChannels(); }
-  if (p === 'ai')         { loadLLM(); }
+  if (p === 'ai')         { loadLLM(); loadLLMProfiles(); }
   if (p === 'history')    { loadHistory(); }
   if (p === 'stats')      { initStats(); }
   if (p === 'prompts')    { loadPrompts(); }
@@ -1414,6 +1626,7 @@ async function pollStatus() {
 }
 setInterval(pollStatus, 5000);
 pollStatus();
+loadLLMProfiles();
 
 // ── 暂停 / 恢复 / 停止 ────────────────────────────────────────────
 async function pauseResumeScan() {
@@ -1431,7 +1644,15 @@ async function stopScan() {
     const r = await api('POST', '/api/scan/stop');
     toast(r.msg);
     setTimeout(pollStatus, 1000);
-  } catch(e) { toast(e.message, true); }
+  } catch(e) {
+    // 扫描已在发出停止请求前自动结束，不是真正的错误
+    if (e.message && e.message.includes('没有正在进行')) {
+      toast('扫描已结束');
+      pollStatus();
+    } else {
+      toast(e.message, true);
+    }
+  }
 }
 
 async function rerunScan(id) {
@@ -1452,31 +1673,54 @@ async function deleteScan(id) {
 }
 
 // ── 触发扫描 ──────────────────────────────────────────────────────
-async function triggerScan(scanType) {
+let _pendingScanType = null;
+
+function triggerScan(scanType) {
+  _pendingScanType = scanType;
+  const META = {
+    poison:            {icon:'🛡️', titleZh:'投毒检测',   titleEn:'Poison Detection',
+                        descZh:'扫描最近各分支新增与修改的文件，专注识别代码投毒与供应链攻击行为。',
+                        descEn:'Scan recently modified files across branches to detect code poisoning and supply chain attacks.'},
+    incremental_audit: {icon:'🔍', titleZh:'增量代码审计', titleEn:'Incremental Audit',
+                        descZh:'审计各分支最近提交变更的文件，全面覆盖高危与严重安全漏洞。',
+                        descEn:'Audit recently changed files across all branches for critical and high-severity vulnerabilities.'},
+    full_audit:        {icon:'📦', titleZh:'全量代码审计', titleEn:'Full Audit',
+                        descZh:'拉取 main/master 分支当前最新代码进行完整安全审计，覆盖所有漏洞级别，耗时较长。',
+                        descEn:'Fetch the current main/master branch and perform a complete security audit covering all severity levels. This may take a while.'},
+  };
+  const m = META[scanType] || {};
+  const isEn = _lang === 'en';
+  document.getElementById('scanModalIcon').textContent  = m.icon || '🔍';
+  document.getElementById('scanModalTitle').textContent = isEn ? (m.titleEn || scanType) : (m.titleZh || scanType);
+  document.getElementById('scanModalDesc').textContent  = isEn ? (m.descEn || '') : (m.descZh || '');
+  openModal('scanTriggerModal');
+}
+
+async function doTriggerScan() {
+  const scanType = _pendingScanType;
+  if (!scanType) return;
+  closeScanModal();
   const _labels = {poison:'投毒检测', incremental_audit:'增量代码审计', full_audit:'全量代码审计'};
   const label = _labels[scanType] || scanType;
-  if (scanType === 'full_audit' && !confirm('全量代码审计将拉取 main/master 分支所有历史提交，数据量可能较大，耗时较长，确认继续？')) return;
-  const btnId   = {poison:'poisonBtn', incremental_audit:'scanBtn', full_audit:'fullScanBtn'}[scanType];
-  const btn     = document.getElementById(btnId);
-  const scanBtn = document.getElementById('scanBtn');
-  const fsBtn   = document.getElementById('fullScanBtn');
-  const pBtn    = document.getElementById('poisonBtn');
-  if (btn) btn.textContent = '扫描中…';
-  [scanBtn, fsBtn, pBtn].forEach(b => { if (b) b.disabled = true; });
+  const btnId = {poison:'poisonBtn', incremental_audit:'scanBtn', full_audit:'fullScanBtn'}[scanType];
+  const btn   = document.getElementById(btnId);
+  const allBtns = ['scanBtn','fullScanBtn','poisonBtn'].map(id => document.getElementById(id));
+  if (btn) btn.textContent = _lang === 'en' ? 'Scanning…' : '扫描中…';
+  allBtns.forEach(b => { if (b) b.disabled = true; });
   try {
-    const res = await api('POST', '/api/scan/trigger', {scan_type: scanType});
-    toast(res.msg || `${label}已启动，请稍后查看历史记录`);
-    setTimeout(() => { loadPage(currentPage); }, 3000);
+    const llmProfileId = parseInt(document.getElementById('scanModalLlm')?.value) || null;
+    const res = await api('POST', '/api/scan/trigger', {scan_type: scanType, llm_profile_id: llmProfileId});
+    toast(res.msg || (_lang === 'en' ? `${label} started` : `${label}已启动`));
+    setTimeout(() => loadPage(currentPage), 3000);
   } catch(e) {
     toast(e.message, true);
   } finally {
-    if (btn) btn.textContent = label;
-    [scanBtn, fsBtn, pBtn].forEach(b => { if (b) b.disabled = false; });
-    document.getElementById('poisonBtn').textContent = '投毒检测';
-    document.getElementById('scanBtn').textContent   = '增量审计';
-    document.getElementById('fullScanBtn').textContent = '全量审计';
+    allBtns.forEach(b => { if (b) b.disabled = false; });
+    applyLang();
   }
 }
+
+function closeScanModal() { closeModal('scanTriggerModal'); }
 
 // ── 概览 ──────────────────────────────────────────────────────────
 async function loadDashboard() {
@@ -1496,7 +1740,7 @@ async function loadDashboard() {
 function renderScanTable(id, scans) {
   const el = document.getElementById(id);
   if (!scans.length) { el.innerHTML = '<div class="empty">暂无扫描记录</div>'; return; }
-  const STATUS_LABEL    = {done:'完成',running:'进行中',paused:'已暂停',error:'失败',stopped:'已停止'};
+  const STATUS_LABEL    = {done:t('status.done'),running:t('status.running'),paused:t('status.paused'),error:t('status.error'),stopped:t('status.stopped'),interrupted:t('status.interrupted')};
   const SCAN_TYPE_LABEL = {poison:'🛡️ 投毒检测',incremental_audit:'🔍 增量审计',full_audit:'📦 全量审计',
                            incremental:'🔍 增量审计',full:'📦 全量审计'};
   el.innerHTML = `<table>
@@ -1514,8 +1758,10 @@ function renderScanTable(id, scans) {
         <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           ${s.status==='done' && s.total_findings > 0 ? `<button class="btn btn-primary btn-sm" onclick="openFindings(${s.id})">查看漏洞</button>` : ''}
           ${s.report_path ? `<a href="/reports/${s.report_path.split('/').pop()}" target="_blank"><button class="btn btn-default btn-sm">HTML</button></a>` : ''}
-          ${s.status==='done' && s.total_findings > 0 ? `<button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'json')">JSON</button><button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'markdown')">MD</button>` : ''}
+          ${s.report_path ? `<button class="btn btn-default btn-sm" onclick="exportPdf(${s.id})">PDF</button>` : ''}
+          ${s.status==='done' && s.total_findings > 0 ? `<button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'json')">JSON</button><button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'markdown')">MD</button><button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'docx')">DOCX</button>` : ''}
           <button class="btn btn-default btn-sm" onclick="openScanLogs(${s.id})">日志</button>
+          ${s.status==='interrupted' ? `<button class="btn btn-primary btn-sm" onclick="rerunScan(${s.id})">重启</button>` : ''}
           ${!['running','paused'].includes(s.status) ? `<button class="btn btn-default btn-sm" onclick="rerunScan(${s.id})">重跑</button>` : ''}
           ${!['running','paused'].includes(s.status) ? `<button class="btn btn-default btn-sm" style="color:#ff4d4f;border-color:#ff4d4f" onclick="deleteScan(${s.id})">删除</button>` : ''}
         </td>
@@ -1584,11 +1830,143 @@ function filterFindingsByStatus() {
 async function updateFindingStatus(id, status) {
   try {
     await api('PATCH', `/api/findings/${id}/status`, {status});
+    // 同步到列表缓存
     const f = _allFindings.find(x => x.id === id);
     if (f) f.status = status;
     renderFindings();
+    // 如果详情弹窗打开着，同步刷新状态栏
+    const detail = document.getElementById('fdContent');
+    if (detail && document.getElementById('findingDetailModal').classList.contains('show')) {
+      _refreshFdStatusBar(id, status);
+    }
     toast('状态已更新');
   } catch(e) { toast(e.message, true); }
+}
+
+// ── 漏洞详情弹窗 ──────────────────────────────────────────────
+async function openFindingDetail(id) {
+  openModal('findingDetailModal');
+  document.getElementById('fdContent').innerHTML = '<div class="empty" style="padding:40px 0">加载中…</div>';
+  try {
+    const f = await api('GET', `/api/findings/${id}`);
+    document.getElementById('fdContent').innerHTML = _renderFindingDetail(f);
+  } catch(e) {
+    document.getElementById('fdContent').innerHTML = `<div class="empty" style="color:#ff4d4f">${esc(e.message)}</div>`;
+  }
+}
+
+function _refreshFdStatusBar(id, status) {
+  const bar = document.getElementById(`fd-status-bar-${id}`);
+  if (!bar) return;
+  const STATUS_LABEL = {new:'新增',fixing:'修复中',fixed:'已修复',wont_fix:'暂不处理'};
+  const STATUS_CLASS  = {new:'badge-status-new',fixing:'badge-status-fixing',fixed:'badge-status-fixed',wont_fix:'badge-status-wont_fix'};
+  bar.innerHTML = ['new','fixing','fixed','wont_fix'].map(s => `
+    <button class="sev-tab btn-sm ${status===s?'active':''}" style="border-radius:12px;padding:3px 14px;font-size:12px"
+      onclick="updateFindingStatus(${id},'${s}')">${STATUS_LABEL[s]}</button>
+  `).join('');
+}
+
+function _renderFindingDetail(f) {
+  const SEV_COLOR = {critical:'#ff4d4f',high:'#fa8c16',medium:'#d4b106',low:'#52c41a'};
+  const SEV_LABEL = {critical:'严重',high:'高危',medium:'中危',low:'低危'};
+  const STATUS_LABEL = {new:'新增',fixing:'修复中',fixed:'已修复',wont_fix:'暂不处理'};
+  const fStatus = f.status || 'new';
+
+  // 责任人卡片
+  const isOwner = !f.responsible_is_author;
+  const personName    = esc(f.responsible_person || '—');
+  const personContact = f.contact ? `<div class="fd-person-sub">📧 ${esc(f.contact)}</div>` : '';
+  const personTag = isOwner
+    ? '<span class="fd-person-tag">仓库负责人</span>'
+    : '<span class="fd-person-tag">提交人（未配置仓库负责人）</span>';
+  const responsibleCard = `
+    <div class="fd-responsible ${isOwner ? 'owner' : 'author'}">
+      <div class="fd-avatar">${isOwner ? '👤' : '✍️'}</div>
+      <div>
+        <div class="fd-person-name">${personName}</div>
+        ${personContact}
+        ${personTag}
+      </div>
+    </div>`;
+
+  // 涉及文件
+  let fileSection = '';
+  if (f.is_cross_file) {
+    let cf = [];
+    try { cf = JSON.parse(f.cross_files || '[]'); } catch(e) {}
+    if (!cf.length && f.filename) cf = f.filename.split(' + ');
+    fileSection = `
+      <div class="fd-section-title">🔗 涉及文件（跨文件分析）</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+        ${cf.map(fn => `<code style="background:#f5f0ff;color:#6d28d9;padding:3px 10px;border-radius:6px;font-size:12px">${esc(fn)}</code>`).join('')}
+      </div>`;
+  } else {
+    fileSection = `
+      <div class="fd-section-title">📄 文件位置</div>
+      <code style="font-size:13px;color:#1a1a1a;word-break:break-all">${esc(f.filename || '—')}</code>
+      ${f.line ? `<span style="margin-left:10px;font-size:12px;color:#888">第 ${esc(f.line)} 行</span>` : ''}`;
+  }
+
+  // 元数据网格
+  const sha7 = String(f.commit_sha || '').slice(0, 7) || '—';
+  const commitLink = f.commit_url
+    ? `<a href="${esc(f.commit_url)}" target="_blank" style="color:#16a34a">${sha7}</a>`
+    : sha7;
+  const metaGrid = `
+    <div class="fd-meta-grid">
+      <div class="fd-meta-item">
+        <div class="fd-meta-label">仓库</div>
+        <div class="fd-meta-value">${esc(f.repo || '—')}</div>
+      </div>
+      <div class="fd-meta-item">
+        <div class="fd-meta-label">提交</div>
+        <div class="fd-meta-value">${commitLink} &nbsp; by ${esc(f.author || '—')}</div>
+      </div>
+      <div class="fd-meta-item">
+        <div class="fd-meta-label">发现时间</div>
+        <div class="fd-meta-value">${fmtTime(f.committed_at) || '—'}</div>
+      </div>
+      <div class="fd-meta-item">
+        <div class="fd-meta-label">漏洞类型</div>
+        <div class="fd-meta-value">${f.type === 'poisoning' ? '🔴 代码投毒' : '🛡️ 安全漏洞'}
+          ${f.is_cross_file ? '&nbsp;<span style="font-size:11px;color:#5b21b6">🔗 跨文件</span>' : ''}
+        </div>
+      </div>
+    </div>`;
+
+  // 描述 + 建议
+  const descSection = f.description ? `
+    <div class="fd-section-title">📋 漏洞描述</div>
+    <div class="fd-desc">${esc(f.description)}</div>` : '';
+  const recSection = f.recommendation ? `
+    <div class="fd-section-title">🔧 修复建议</div>
+    <div class="fd-rec">${esc(f.recommendation)}</div>` : '';
+
+  // 状态栏
+  const statusSection = `
+    <div class="fd-section-title">📌 处理状态</div>
+    <div class="fd-status-bar" id="fd-status-bar-${f.id}">
+      ${['new','fixing','fixed','wont_fix'].map(s => `
+        <button class="sev-tab btn-sm ${fStatus===s?'active':''}" style="border-radius:12px;padding:3px 14px;font-size:12px"
+          onclick="updateFindingStatus(${f.id},'${s}')">${STATUS_LABEL[s]}</button>
+      `).join('')}
+    </div>`;
+
+  return `
+    <div style="margin-bottom:18px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+        <span class="badge" style="background:${SEV_COLOR[f.severity]||'#888'};color:#fff;font-size:13px;padding:4px 12px">${SEV_LABEL[f.severity]||f.severity}</span>
+        <span class="badge" style="background:#f5f5f5;color:#666">${f.type==='poisoning'?'🔴 投毒':'🛡️ 漏洞'}</span>
+        ${f.is_cross_file ? '<span class="badge" style="background:#f0f0fe;color:#5b21b6;border:1px solid #c4b5fd">🔗 跨文件</span>' : ''}
+      </div>
+      <div style="font-size:18px;font-weight:800;color:#14532d;line-height:1.4">${esc(f.title)}</div>
+    </div>
+    ${responsibleCard}
+    ${metaGrid}
+    ${fileSection}
+    ${descSection}
+    ${recSection}
+    ${statusSection}`;
 }
 
 function _renderFindingItem(f) {
@@ -1600,14 +1978,25 @@ function _renderFindingItem(f) {
     <div class="fi-header">
       <span class="badge" style="background:${SEV_COLOR[f.severity]||'#888'};color:#fff">${SEV_LABEL[f.severity]||f.severity}</span>
       <span class="badge" style="background:#f5f5f5;color:#666">${f.type==='poisoning'?'🔴 投毒':'🛡️ 漏洞'}</span>
+      ${f.is_cross_file ? '<span class="badge" style="background:#f0f0fe;color:#5b21b6;border:1px solid #c4b5fd" title="跨文件联合分析发现">🔗 跨文件</span>' : ''}
       <span class="badge ${FINDING_STATUS_CLASS[fStatus]||''}">${FINDING_STATUS_LABEL[fStatus]||fStatus}</span>
-      <strong style="font-size:14px">${esc(f.title)}</strong>
+      <strong style="font-size:14px;flex:1">${esc(f.title)}</strong>
+      <button class="btn btn-default btn-sm" style="margin-left:auto;flex-shrink:0" onclick="openFindingDetail(${f.id})">详情</button>
     </div>
-    <div class="fi-file">📄 ${esc(f.filename)}${f.line?' &nbsp;第 '+esc(f.line)+' 行':''}</div>
+    ${f.is_cross_file
+      ? (() => {
+          let cf = [];
+          try { cf = JSON.parse(f.cross_files || '[]'); } catch(e) {}
+          if (!cf.length && f.filename) cf = f.filename.split(' + ');
+          return `<div class="fi-file" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+            🔗 涉及文件：${cf.map(fn => `<code style="background:#f5f0ff;color:#6d28d9;padding:1px 6px;border-radius:4px;font-size:11px">${esc(fn)}</code>`).join('')}
+          </div>`;
+        })()
+      : `<div class="fi-file">📄 ${esc(f.filename)}${f.line?' &nbsp;第 '+esc(f.line)+' 行':''}</div>`}
     <div class="fi-desc">${esc(f.description)}</div>
     ${f.recommendation ? `<div class="fi-rec">${esc(f.recommendation)}</div>` : ''}
     <div class="fi-commit">
-      commit ${f.commit_url ? `<a href="${esc(f.commit_url)}" target="_blank" style="color:#1677ff">${String(f.commit_sha||'').slice(0,7)||'—'}</a>` : String(f.commit_sha||'').slice(0,7)||'—'}
+      commit ${f.commit_url ? `<a href="${esc(f.commit_url)}" target="_blank" style="color:#16a34a">${String(f.commit_sha||'').slice(0,7)||'—'}</a>` : String(f.commit_sha||'').slice(0,7)||'—'}
       &nbsp;·&nbsp;${esc(f.author)}&nbsp;·&nbsp;${fmtTime(f.committed_at)}
     </div>
     <div class="fi-status">
@@ -2059,6 +2448,136 @@ async function saveLLM() {
   loadLLM();
 }
 
+// ── LLM 配置列表 ──────────────────────────────────────────────────
+let _llmProfiles = [];
+
+async function loadLLMProfiles() {
+  _llmProfiles = await api('GET', '/api/llm-profiles').catch(() => []);
+  renderProfileList();
+  populateProfileSelects();
+}
+
+function renderProfileList() {
+  const el = document.getElementById('llmProfileList');
+  if (!el) return;
+  if (!_llmProfiles.length) {
+    el.innerHTML = '<div class="empty" style="padding:12px 0">暂无配置，点击右上角添加</div>';
+    return;
+  }
+  const PROVIDER_LABEL = {deepseek:'DeepSeek',openai:'OpenAI',anthropic:'Claude',qwen:'通义',zhipu:'智谱',
+    moonshot:'月之暗面',doubao:'豆包',minimax:'MiniMax',baidu:'文心',gemini:'Gemini',
+    openrouter:'OpenRouter',ollama:'Ollama'};
+  el.innerHTML = _llmProfiles.map(p => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f5f5f5">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:13px">${p.name}</div>
+        <div style="font-size:12px;color:#888;margin-top:2px">
+          <span class="badge badge-running">${PROVIDER_LABEL[p.provider]||p.provider}</span>
+          ${p.model ? `<span style="margin-left:6px">${p.model}</span>` : '<span style="margin-left:6px;color:#bbb">默认模型</span>'}
+          ${p.base_url ? `<span style="margin-left:6px;color:#aaa">${p.base_url}</span>` : ''}
+        </div>
+      </div>
+      <button class="btn btn-default btn-sm" onclick="testProfileById(${p.id})" id="testProfileBtn-${p.id}">测试</button>
+      <button class="btn btn-default btn-sm" onclick="editProfile(${p.id})">编辑</button>
+      <button class="btn btn-default btn-sm" style="color:#ff4d4f;border-color:#ff4d4f" onclick="deleteProfile(${p.id})">删除</button>
+    </div>
+  `).join('');
+}
+
+function populateProfileSelects() {
+  const opts = _llmProfiles.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  ['scanModalLlm','newSched-poison-llm','newSched-incremental_audit-llm','newSched-full_audit-llm'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">' + (_lang === 'en' ? 'Global Config' : '全局配置') + '</option>' + opts;
+    el.value = cur || '';
+  });
+}
+
+function showProfileForm() {
+  document.getElementById('llmProfileFormTitle').textContent = '添加 AI 配置';
+  document.getElementById('editProfileId').value = '';
+  document.getElementById('profileName').value = '';
+  document.getElementById('profileProvider').value = '';
+  document.getElementById('profileModel').value = '';
+  document.getElementById('profileApiKey').value = '';
+  document.getElementById('profileBaseUrl').value = '';
+  document.getElementById('llmProfileForm').style.display = 'block';
+}
+
+function hideProfileForm() {
+  document.getElementById('llmProfileForm').style.display = 'none';
+}
+
+function editProfile(id) {
+  const p = _llmProfiles.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('llmProfileFormTitle').textContent = '编辑 AI 配置';
+  document.getElementById('editProfileId').value = id;
+  document.getElementById('profileName').value = p.name;
+  document.getElementById('profileProvider').value = p.provider;
+  document.getElementById('profileModel').value = p.model || '';
+  document.getElementById('profileApiKey').value = '';
+  document.getElementById('profileBaseUrl').value = p.base_url || '';
+  document.getElementById('llmProfileForm').style.display = 'block';
+  document.getElementById('llmProfileForm').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+async function saveProfile() {
+  const id       = document.getElementById('editProfileId').value;
+  const name     = document.getElementById('profileName').value.trim();
+  const provider = document.getElementById('profileProvider').value;
+  const model    = document.getElementById('profileModel').value.trim();
+  const apiKey   = document.getElementById('profileApiKey').value.trim();
+  const baseUrl  = document.getElementById('profileBaseUrl').value.trim();
+  if (!name) { toast('请填写配置名称', true); return; }
+  if (!provider) { toast('请选择提供商', true); return; }
+  if (id) {
+    await api('PUT', `/api/llm-profiles/${id}`, {name, provider, model, api_key: apiKey, base_url: baseUrl});
+    toast('配置已更新');
+  } else {
+    await api('POST', '/api/llm-profiles', {name, provider, model, api_key: apiKey, base_url: baseUrl});
+    toast('配置已添加');
+  }
+  hideProfileForm();
+  await loadLLMProfiles();
+}
+
+async function deleteProfile(id) {
+  if (!confirm('确定删除此 AI 配置？')) return;
+  await api('DELETE', `/api/llm-profiles/${id}`);
+  toast('已删除');
+  await loadLLMProfiles();
+}
+
+async function testProfileById(id) {
+  const btn = document.getElementById(`testProfileBtn-${id}`);
+  if (btn) { btn.textContent = '测试中…'; btn.disabled = true; }
+  try {
+    const r = await api('POST', `/api/llm-profiles/${id}/test`);
+    toast('✓ 连接成功');
+  } catch(e) {
+    toast('✗ ' + (e.message || '连接失败'), true);
+  } finally {
+    if (btn) { btn.textContent = '测试'; btn.disabled = false; }
+  }
+}
+
+async function testLLM() {
+  const el = document.getElementById('llmTestResult');
+  el.style.color = '#888';
+  el.textContent = '测试中…';
+  try {
+    const r = await api('POST', '/api/llm-config/test');
+    el.style.color = '#52c41a';
+    el.textContent = '✓ 连接成功';
+  } catch(e) {
+    el.style.color = '#ff4d4f';
+    el.textContent = '✗ ' + (e.message || '连接失败');
+  }
+}
+
 async function saveLegacyLLM() {
   const dk = document.getElementById('deepseekKey').value.trim();
   const ak = document.getElementById('anthropicKey').value.trim();
@@ -2079,7 +2598,7 @@ async function loadHistory() {
 function exportScan(id, fmt) {
   const token = getToken();
   const url = `/api/scans/${id}/export?format=${fmt}`;
-  // 构造带 Auth 的临时下载
+  const extMap = {json:'json', markdown:'md', docx:'docx'};
   fetch(url, {headers:{'Authorization':'Bearer '+token}})
     .then(r => {
       if (!r.ok) throw new Error('导出失败');
@@ -2088,10 +2607,30 @@ function exportScan(id, fmt) {
     .then(blob => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `scan_${id}.${fmt === 'markdown' ? 'md' : 'json'}`;
+      a.download = `scan_${id}.${extMap[fmt] || fmt}`;
       a.click();
     })
     .catch(e => toast(e.message, true));
+}
+
+function exportPdf(id) {
+  // 直接在新标签打开 HTML 报告，用浏览器内置打印另存为 PDF（完整中文支持）
+  const reports = document.querySelectorAll(`[data-scan-id="${id}"] a[href*="/reports/"]`);
+  // 找到对应扫描行的报告链接
+  let reportUrl = null;
+  document.querySelectorAll('tr').forEach(tr => {
+    if (tr.innerHTML.includes(`onclick="exportPdf(${id})"`) || tr.innerHTML.includes(`exportScan(${id}`)) {
+      const a = tr.querySelector('a[href*="/reports/"]');
+      if (a) reportUrl = a.href;
+    }
+  });
+  if (!reportUrl) { toast(_lang === 'en' ? 'HTML report not found' : 'HTML 报告不存在', true); return; }
+  const w = window.open(reportUrl, '_blank');
+  if (w) {
+    setTimeout(() => {
+      try { w.print(); } catch(e) {}
+    }, 1500);
+  }
 }
 
 // ── 通知渠道测试 ──────────────────────────────────────────────────
@@ -2165,10 +2704,10 @@ function iaTab(mode) {
   document.getElementById('ia_panel_upload').style.display = mode === 'upload' ? '' : 'none';
   const tabPaste  = document.getElementById('ia_tab_paste');
   const tabUpload = document.getElementById('ia_tab_upload');
-  tabPaste.style.color        = mode === 'paste'  ? '#1677ff' : '#888';
-  tabPaste.style.borderBottomColor  = mode === 'paste'  ? '#1677ff' : 'transparent';
-  tabUpload.style.color       = mode === 'upload' ? '#1677ff' : '#888';
-  tabUpload.style.borderBottomColor = mode === 'upload' ? '#1677ff' : 'transparent';
+  tabPaste.style.color        = mode === 'paste'  ? '#16a34a' : '#888';
+  tabPaste.style.borderBottomColor  = mode === 'paste'  ? '#16a34a' : 'transparent';
+  tabUpload.style.color       = mode === 'upload' ? '#16a34a' : '#888';
+  tabUpload.style.borderBottomColor = mode === 'upload' ? '#16a34a' : 'transparent';
   document.getElementById('ia_result').style.display = 'none';
 }
 
@@ -2203,8 +2742,8 @@ function iaFileSelected(event) {
 
 function iaDragOver(event) {
   event.preventDefault();
-  document.getElementById('ia_dropzone').style.borderColor = '#1677ff';
-  document.getElementById('ia_dropzone').style.background  = '#e6f4ff';
+  document.getElementById('ia_dropzone').style.borderColor = '#16a34a';
+  document.getElementById('ia_dropzone').style.background  = '#dcfce7';
 }
 function iaDragLeave() {
   document.getElementById('ia_dropzone').style.borderColor = '#d9d9d9';
@@ -2407,7 +2946,7 @@ async function loadScheduleList() {
         <th>时间</th><th>备注</th><th style="width:70px">启用</th><th style="width:60px">操作</th>
       </tr></thead>
       <tbody>${list.map(s => `<tr>
-        <td style="font-family:monospace;font-size:14px;font-weight:700;color:#1677ff">${_schedTimeLabel(s)}</td>
+        <td style="font-family:monospace;font-size:14px;font-weight:700;color:#16a34a">${_schedTimeLabel(s)}</td>
         <td style="color:#888;font-size:13px">${esc(s.label||'')}</td>
         <td>
           <label class="toggle">
@@ -2483,7 +3022,8 @@ async function submitAddSchedule(type) {
     }
   }
 
-  const body = {type, hour, minute, label};
+  const llmVal = document.getElementById(`newSched-${type}-llm`)?.value;
+  const body = {type, hour, minute, label, llm_profile_id: llmVal ? parseInt(llmVal) : null};
   if (weekday !== null) body.weekday = weekday;
   await api('POST', '/api/scan-schedules', body);
   toast('时间点已添加');
@@ -2661,7 +3201,7 @@ function renderStatsTable(data, period) {
 // ── 提示词管理 ──────────────────────────────────────────────────────
 const CATEGORY_LABEL = {frontend:'前端',backend:'后端',contract:'合约',custom:'自定义'};
 const CATEGORY_COLOR = {
-  frontend:'background:#e6f4ff;color:#1677ff',
+  frontend:'background:#dcfce7;color:#16a34a',
   backend:'background:#f6ffed;color:#389e0d',
   contract:'background:#fff7e6;color:#d46b08',
   custom:'background:#f5f0ff;color:#531dab',
@@ -2795,7 +3335,7 @@ async function loadUsers() {
     <thead><tr><th>用户名</th><th>操作</th></tr></thead>
     <tbody>${list.map(u => `
       <tr>
-        <td style="font-weight:600">${esc(u.username)}${u.username===_currentUser ? ' <span style="font-size:11px;color:#1677ff;font-weight:400">（当前）</span>' : ''}</td>
+        <td style="font-weight:600">${esc(u.username)}${u.username===_currentUser ? ' <span style="font-size:11px;color:#16a34a;font-weight:400">（当前）</span>' : ''}</td>
         <td style="display:flex;gap:8px">
           <button class="btn btn-default btn-sm" onclick="showChangePwd('${esc(u.username)}')">修改密码</button>
           ${u.username !== _currentUser
@@ -2933,8 +3473,100 @@ async function testSyslog() {
   }
 }
 
+// ── 主题切换 ──────────────────────────────────────────────────────
+let _theme = localStorage.getItem('theme') || 'light';
+
+function applyTheme() {
+  document.body.classList.toggle('dark', _theme === 'dark');
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = _theme === 'dark' ? '☀️' : '🌙';
+}
+
+function toggleTheme() {
+  _theme = _theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('theme', _theme);
+  applyTheme();
+}
+
+// ── 语言切换 ──────────────────────────────────────────────────────
+let _lang = localStorage.getItem('lang') || 'zh';
+
+const _T = {
+  zh: {
+    'nav.dashboard':'概览','nav.accounts':'账户配置','nav.repoowners':'仓库负责人',
+    'nav.channels':'通知渠道','nav.instant':'即时分析','nav.ai':'AI 配置',
+    'nav.history':'扫描历史','nav.stats':'漏洞统计','nav.prompts':'提示词',
+    'nav.whitelist':'误报白名单','nav.users':'账户管理','nav.settings':'系统设置',
+    'nav.poison':'投毒检测','nav.inc':'增量审计','nav.full':'全量审计',
+    'btn.cancel':'取消','btn.startScan':'开始扫描',
+    'modal.selectAI':'选择 AI 模型','modal.globalAI':'全局 AI 配置',
+    'topbar.pause':'暂停','topbar.stop':'停止','topbar.logout':'退出',
+    'status.done':'完成','status.running':'进行中','status.paused':'已暂停',
+    'status.error':'失败','status.stopped':'已停止','status.interrupted':'已中断',
+  },
+  en: {
+    'nav.dashboard':'Dashboard','nav.accounts':'Accounts','nav.repoowners':'Repo Owners',
+    'nav.channels':'Channels','nav.instant':'Instant Analysis','nav.ai':'AI Config',
+    'nav.history':'Scan History','nav.stats':'Statistics','nav.prompts':'Prompts',
+    'nav.whitelist':'False Positive List','nav.users':'User Management','nav.settings':'Settings',
+    'nav.poison':'Poison Detect','nav.inc':'Incremental Audit','nav.full':'Full Audit',
+    'btn.cancel':'Cancel','btn.startScan':'Start Scan',
+    'modal.selectAI':'Select AI Model','modal.globalAI':'Global AI Config',
+    'topbar.pause':'Pause','topbar.stop':'Stop','topbar.logout':'Logout',
+    'status.done':'Done','status.running':'Running','status.paused':'Paused',
+    'status.error':'Error','status.stopped':'Stopped','status.interrupted':'Interrupted',
+  }
+};
+
+function t(key) { return (_T[_lang] || _T.zh)[key] || (_T.zh)[key] || key; }
+
+function applyLang() {
+  const btn = document.getElementById('langBtn');
+  if (btn) btn.textContent = _lang === 'en' ? 'EN' : '中';
+  // 更新带 data-i18n 属性的静态元素
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    const val = t(key);
+    if (val) el.textContent = val;
+  });
+  // 更新导航
+  const navMap = [
+    ['dashboard','nav.dashboard'],['accounts','nav.accounts'],['repoowners','nav.repoowners'],
+    ['channels','nav.channels'],['instant','nav.instant'],['ai','nav.ai'],
+    ['history','nav.history'],['stats','nav.stats'],['prompts','nav.prompts'],
+    ['whitelist','nav.whitelist'],['users','nav.users'],['settings','nav.settings'],
+  ];
+  document.querySelectorAll('.nav-item').forEach((el, i) => {
+    if (navMap[i]) {
+      const icon = el.querySelector('.icon');
+      if (icon) el.innerHTML = icon.outerHTML + t(navMap[i][1]);
+    }
+  });
+  // 更新 pageTitle
+  const PAGE_TITLES_I18N = {
+    dashboard: t('nav.dashboard'), accounts: t('nav.accounts'), repoowners: t('nav.repoowners'),
+    channels: t('nav.channels'), instant: t('nav.instant'), ai: t('nav.ai'),
+    history: t('nav.history'), stats: t('nav.stats'), prompts: t('nav.prompts'),
+    whitelist: t('nav.whitelist'), users: t('nav.users'), settings: t('nav.settings'),
+  };
+  const titleEl = document.getElementById('pageTitle');
+  if (titleEl && PAGE_TITLES_I18N[currentPage]) titleEl.textContent = PAGE_TITLES_I18N[currentPage];
+  // 重新填充 AI 模型下拉（语言相关的"全局配置"选项）
+  populateProfileSelects();
+}
+
+function toggleLang() {
+  _lang = _lang === 'en' ? 'zh' : 'en';
+  localStorage.setItem('lang', _lang);
+  applyLang();
+  // 重载当前页面内容
+  loadPage(currentPage);
+}
+
 // 初始化
 renderChannelForm();
+applyTheme();
+applyLang();
 
 // 检查登录状态
 (async () => {
