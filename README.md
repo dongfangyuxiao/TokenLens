@@ -122,6 +122,48 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `BASE_URL` | 报告链接前缀，用于通知消息中的跳转地址 | `http://localhost:8000` |
+| `LICENSE_SECRET` | 产品授权签名密钥，生成与校验授权码时必须一致 | `springstillness-dev-license-secret` |
+| `PRODUCT_INSTANCE_ID` | 手工指定当前实例 ID；不设置时自动按主机信息生成 | 自动生成 |
+
+## 产品授权
+
+当前版本已内置授权配置、签名校验和实例绑定能力，但默认 **不启用拦截**。  
+你可以先在 **系统设置 → 产品授权** 中录入授权码并验证状态，待联调完成后再开启授权校验。
+
+### 生成授权码
+
+先设置签名密钥：
+
+```bash
+export LICENSE_SECRET='replace-with-your-secret'
+```
+
+生成一个不绑定机器的授权码：
+
+```bash
+python3 license_manager.py generate \
+  --customer 'Acme Corp' \
+  --expires-at '2027-12-31T23:59:59Z'
+```
+
+生成一个绑定指定实例 ID 的授权码：
+
+```bash
+python3 license_manager.py generate \
+  --customer 'Acme Corp' \
+  --expires-at '2027-12-31T23:59:59Z' \
+  --machine-id '粘贴系统设置页里的实例 ID'
+```
+
+可重复追加 `--feature` 写入功能点，例如 `--feature full_audit --feature instant_analysis`。
+
+### 校验授权码
+
+```bash
+python3 license_manager.py verify \
+  --license-key '粘贴授权码' \
+  --machine-id '粘贴系统设置页里的实例 ID'
+```
 
 ## 使用指南
 

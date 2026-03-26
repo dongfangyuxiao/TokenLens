@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from typing import List
 from apscheduler.schedulers.background import BackgroundScheduler
 import database as db
+import license_manager
 from scanner import run_scan
 from reporter import build_markdown_report, build_json_report
 from notifier import test_channel as notifier_test_channel
@@ -60,6 +61,41 @@ _pause_event = threading.Event()   # set → 运行中；clear → 暂停中
 _pause_event.set()
 
 _WEEKDAY_CN = ['周一','周二','周三','周四','周五','周六','周日']
+
+
+def _get_license_status():
+    cfg = db.get_app_config()
+    license_key = (cfg.get('license_key') or '').strip()
+    enforce_enabled = cfg.get('license_enforce_enabled', '0') == '1'
+    instance_id = license_manager.get_instance_id()
+    result = license_manager.verify_license(
+        license_key,
+        expected_product=license_manager.DEFAULT_PRODUCT,
+        expected_machine_id=instance_id,
+    )
+    payload = result.get('payload') or {}
+    return {
+        'configured': bool(license_key),
+        'enforce_enabled': enforce_enabled,
+        'instance_id': instance_id,
+        'valid': result.get('valid', False),
+        'state': result.get('state', 'missing'),
+        'message': result.get('message', '未配置授权码'),
+        'product': payload.get('product', license_manager.DEFAULT_PRODUCT),
+        'customer': payload.get('customer', ''),
+        'issued_at': payload.get('issued_at', ''),
+        'expires_at': payload.get('expires_at', ''),
+        'features': payload.get('features', []),
+        'machine_id': payload.get('machine_id', ''),
+        'metadata': payload.get('metadata', {}),
+    }
+
+
+def _require_license_if_enabled():
+    status = _get_license_status()
+    if status['enforce_enabled'] and not status['valid']:
+        raise HTTPException(403, f'产品授权校验失败：{status["message"]}')
+    return status
 
 def _run_in_thread(scan_type: str, llm_profile_id=None):
     """在新线程中执行扫描，持有 _scan_lock。"""
@@ -423,6 +459,25 @@ def save_settings(body: dict, _: str = Depends(require_auth)):
     _reschedule()
     return {'ok': True}
 
+
+@app.get('/api/license-status')
+def get_license_status(_: str = Depends(require_auth)):
+    return _get_license_status()
+
+
+class LicenseConfigIn(BaseModel):
+    license_key: str = ''
+    replace_license_key: bool = False
+    enforce_enabled: bool = False
+
+
+@app.post('/api/license-config')
+def save_license_config(body: LicenseConfigIn, _: str = Depends(require_auth)):
+    if body.replace_license_key:
+        db.set_app_config('license_key', body.license_key.strip())
+    db.set_app_config('license_enforce_enabled', '1' if body.enforce_enabled else '0')
+    return {'ok': True, 'status': _get_license_status()}
+
 # ── 扫描时间表 API ────────────────────────────────────────────────
 _VALID_TYPES = {'poison', 'incremental_audit', 'full_audit'}
 
@@ -480,6 +535,7 @@ class ScanTrigger(BaseModel):
 
 @app.post('/api/scan/trigger')
 def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(require_auth)):
+    _require_license_if_enabled()
     scan_type = body.scan_type
     if body.full_scan and scan_type == 'incremental_audit':
         scan_type = 'full_audit'
@@ -556,6 +612,7 @@ def delete_scan(scan_id: int, _: str = Depends(require_auth)):
 
 @app.post('/api/scans/{scan_id}/rerun')
 def rerun_scan(scan_id: int, operator: str = Depends(require_auth)):
+    _require_license_if_enabled()
     if not _scan_lock.acquire(blocking=False):
         raise HTTPException(400, '扫描正在进行中，请等待结束后重新扫描')
     row = db.get_scans(limit=200)
@@ -852,6 +909,7 @@ class InstantAnalysisIn(BaseModel):
 @app.post('/api/analyze/instant')
 def instant_analyze(body: InstantAnalysisIn, _: str = Depends(require_auth)):
     """对任意代码片段直接进行 LLM 安全分析，无需 git commit。"""
+    _require_license_if_enabled()
     from analyzer import build_llm_caller, _find_prompt, _parse, AUDIT_EXTENSIONS, SKIP_EXTENSIONS
     import os as _os
 
@@ -897,6 +955,7 @@ async def instant_analyze_upload(
 ):
     """上传文件/文件夹/压缩包进行 LLM 安全分析。"""
     _ = require_auth(credentials)
+    _require_license_if_enabled()
     from analyzer import build_llm_caller, _find_prompt, _parse, AUDIT_EXTENSIONS, SKIP_EXTENSIONS
 
     _MAX_FILE_SIZE  = 300_000   # 单文件最大 300 KB

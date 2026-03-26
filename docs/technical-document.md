@@ -1,6 +1,6 @@
 # 春静企业代码安全平台 — 产品技术文档
 
-**版本**：v2.0
+**版本**：v2.1
 **更新日期**：2026-03-26
 **仓库地址**：https://github.com/dongfangyuxiao/SpringStillness
 
@@ -90,6 +90,7 @@ SpringStillness/
 ├── scanner.py              # 扫描协调器，拉取提交 → 分析 → 存储 → 通知
 ├── analyzer.py             # LLM / Semgrep / OpenSCA 分析引擎
 ├── database.py             # SQLite 数据访问层，DDL 与所有 CRUD
+├── license_manager.py      # 产品授权签发 / 校验工具
 ├── reporter.py             # 报告生成（Markdown / JSON / HTML）
 ├── notifier.py             # 多渠道通知发送
 ├── syslog_sender.py        # Syslog UDP/TCP 转发
@@ -343,7 +344,7 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 #### `app_config` / `llm_config` / `syslog_config`
 | 表 | 说明 |
 |----|------|
-| `app_config` | 系统参数，如 `max_diff_chars`、`opensca_token`、`semgrep_token` |
+| `app_config` | 系统参数，如 `max_diff_chars`、`opensca_token`、`semgrep_token`、`license_key`、`license_enforce_enabled` |
 | `llm_config` | 系统默认 LLM 配置及旧版兼容字段 |
 | `syslog_config` | Syslog 主机、端口、协议和 app_name |
 
@@ -452,6 +453,8 @@ Authorization: Bearer <token>
 |------|------|------|
 | GET | `/api/settings` | 获取系统配置 |
 | POST | `/api/settings` | 更新系统配置 |
+| GET | `/api/license-status` | 获取产品授权状态 |
+| POST | `/api/license-config` | 保存授权码与授权拦截开关 |
 | GET | `/api/admin-users` | 用户列表 |
 | POST | `/api/admin-users` | 创建用户 |
 | PATCH | `/api/admin-users/{username}/password` | 修改密码 |
@@ -681,6 +684,8 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `BASE_URL` | 通知消息中的平台跳转地址 | `http://localhost:8000` |
+| `LICENSE_SECRET` | 授权签名密钥，签发与校验必须一致 | `springstillness-dev-license-secret` |
+| `PRODUCT_INSTANCE_ID` | 手工指定实例 ID；未设置时自动根据主机信息生成 | 自动生成 |
 
 ---
 
@@ -700,6 +705,17 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 ---
 
 ## 15. 版本变更记录
+
+### v2.1（2026-03-26）
+
+**新增**
+- 产品授权模块 `license_manager.py`，支持 HMAC-SHA256 授权码签发与校验
+- 系统设置新增授权码录入、实例 ID 展示、授权状态查看与授权校验开关
+- 新增 `/api/license-status` 与 `/api/license-config` 两个授权接口
+
+**说明**
+- 当前版本默认不启用授权拦截，仅提供配置和联调能力
+- 当后续手动开启授权校验后，扫描触发、重新扫描与即时分析接口会执行授权状态检查
 
 ### v2.0（2026-03-26）
 

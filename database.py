@@ -174,6 +174,8 @@ def init_db():
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('max_diff_chars','12000')")
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('auto_scan_enabled','1')")
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('opensca_token','')")
+        conn.execute("INSERT OR IGNORE INTO app_config VALUES ('license_key','')")
+        conn.execute("INSERT OR IGNORE INTO app_config VALUES ('license_enforce_enabled','0')")
         # 迁移旧版 scan_schedules（无 type / weekday / llm_profile_id 列）
         sched_cols = [r['name'] for r in conn.execute("PRAGMA table_info(scan_schedules)").fetchall()]
         if 'type' not in sched_cols:

@@ -1824,6 +1824,52 @@ body.light .empty{
       </div>
 
       <div class="card">
+        <div class="card-title">产品授权</div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          当前版本已支持授权码配置与校验，但默认不启用拦截。建议先录入授权码完成联调，确认无误后再开启授权校验。
+        </div>
+        <div class="form-row col2">
+          <div class="form-group">
+            <label>实例 ID</label>
+            <input id="licenseInstanceId" readonly placeholder="加载中">
+          </div>
+          <div class="form-group">
+            <label>授权状态</label>
+            <input id="licenseStateText" readonly placeholder="未校验">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>授权码</label>
+            <textarea id="licenseKey" rows="5" placeholder="粘贴授权码"></textarea>
+          </div>
+        </div>
+        <div class="form-row col2">
+          <div class="form-group">
+            <label>客户</label>
+            <input id="licenseCustomer" readonly placeholder="-">
+          </div>
+          <div class="form-group">
+            <label>到期时间</label>
+            <input id="licenseExpiresAt" readonly placeholder="-">
+          </div>
+        </div>
+        <div class="form-row" style="align-items:center;margin-bottom:12px">
+          <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#1a1a1a">
+            <label class="toggle">
+              <input type="checkbox" id="licenseEnforceEnabled">
+              <span class="toggle-slider"></span>
+            </label>
+            启用授权校验
+          </label>
+        </div>
+        <div id="licenseHint" style="font-size:12px;color:#888;margin-bottom:14px">
+          默认关闭，不会拦截扫描或即时分析。
+        </div>
+        <button class="btn btn-primary" onclick="saveLicenseConfig()">保存授权配置</button>
+      </div>
+
+      <div class="card">
         <div class="card-title">扫描工具配置</div>
         <div style="font-size:13px;color:#888;margin-bottom:16px">
           未配置 LLM API Key 时，自动使用 Semgrep + OpenSCA 进行扫描。配置 Token 可获取更多规则/漏洞数据，留空则使用本地扫描。
@@ -4216,6 +4262,7 @@ async function loadSettings() {
   // 工具 Token
   document.getElementById('opescaToken').placeholder  = cfg.opensca_token  ? '已配置（重新输入以更新）' : '留空则仅本地扫描';
   document.getElementById('semgrepToken').placeholder = cfg.semgrep_token  ? '已配置（重新输入以更新）' : '留空则使用社区规则';
+  await loadLicenseStatus();
   loadSyslogSettings();
 }
 
@@ -4275,6 +4322,33 @@ async function testSyslog() {
   } finally {
     btn.disabled = false; btn.textContent = '测试连接';
   }
+}
+
+async function loadLicenseStatus() {
+  const status = await api('GET', '/api/license-status').catch(() => ({}));
+  document.getElementById('licenseInstanceId').value = status.instance_id || '';
+  document.getElementById('licenseStateText').value = status.message || '未配置授权码';
+  document.getElementById('licenseCustomer').value = status.customer || '-';
+  document.getElementById('licenseExpiresAt').value = status.expires_at || '-';
+  document.getElementById('licenseEnforceEnabled').checked = !!status.enforce_enabled;
+  document.getElementById('licenseKey').value = '';
+  document.getElementById('licenseKey').placeholder = status.configured ? '已配置授权码，重新粘贴可更新' : '粘贴授权码';
+  const hint = document.getElementById('licenseHint');
+  const state = status.valid ? '校验通过' : (status.message || '未配置授权码');
+  const enabledText = status.enforce_enabled ? '当前已启用拦截' : '当前未启用拦截';
+  hint.textContent = `${state}，${enabledText}。默认关闭，不会拦截扫描或即时分析。`;
+}
+
+async function saveLicenseConfig() {
+  const licenseKey = document.getElementById('licenseKey').value.trim();
+  const enforceEnabled = document.getElementById('licenseEnforceEnabled').checked;
+  await api('POST', '/api/license-config', {
+    license_key: licenseKey,
+    replace_license_key: !!licenseKey,
+    enforce_enabled: enforceEnabled,
+  });
+  toast('授权配置已保存');
+  await loadLicenseStatus();
 }
 
 // ── 主题切换 ──────────────────────────────────────────────────────
