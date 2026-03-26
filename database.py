@@ -152,6 +152,29 @@ def init_db():
             api_key   TEXT DEFAULT '',
             base_url  TEXT DEFAULT ''
         );
+        CREATE TABLE IF NOT EXISTS repo_sync_status (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            source       TEXT NOT NULL,
+            repo         TEXT NOT NULL,
+            branch       TEXT DEFAULT '',
+            commit_sha   TEXT DEFAULT '',
+            local_path   TEXT DEFAULT '',
+            file_count   INTEGER DEFAULT 0,
+            last_scan_id INTEGER DEFAULT NULL,
+            synced_at    TEXT
+        );
+        CREATE TABLE IF NOT EXISTS component_inventory (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            source        TEXT NOT NULL,
+            repo          TEXT NOT NULL,
+            ecosystem     TEXT DEFAULT '',
+            component     TEXT NOT NULL,
+            version       TEXT DEFAULT '',
+            manifest_file TEXT DEFAULT '',
+            raw_spec      TEXT DEFAULT '',
+            last_scan_id  INTEGER DEFAULT NULL,
+            updated_at    TEXT
+        );
         """)
         # Syslog 默认配置
         conn.execute("INSERT OR IGNORE INTO syslog_config VALUES ('enabled','0')")
@@ -164,6 +187,10 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_scan_id ON findings(scan_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_findings_severity  ON findings(severity)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_scan_logs_scan_id  ON scan_logs(scan_id)")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_repo_sync_source_repo ON repo_sync_status(source, repo)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comp_name ON component_inventory(component)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comp_repo ON component_inventory(repo)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_comp_source ON component_inventory(source)")
         # 默认管理员账户
         row = conn.execute("SELECT username FROM admin_users WHERE username='admin'").fetchone()
         if not row:
@@ -196,8 +223,6 @@ def init_db():
         if not conn.execute("SELECT 1 FROM scan_schedules WHERE type='full_audit'").fetchone():
             conn.execute("INSERT INTO scan_schedules (type,hour,minute,weekday,enabled,label) VALUES ('full_audit',10,0,5,0,'周六早上 10 点')")
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('semgrep_token','')")
-        conn.execute("INSERT OR IGNORE INTO llm_config VALUES ('deepseek_api_key','')")
-        conn.execute("INSERT OR IGNORE INTO llm_config VALUES ('anthropic_api_key','')")
         conn.execute("INSERT OR IGNORE INTO llm_config VALUES ('provider','')")
         conn.execute("INSERT OR IGNORE INTO llm_config VALUES ('model','')")
         conn.execute("INSERT OR IGNORE INTO llm_config VALUES ('api_key','')")
@@ -491,6 +516,89 @@ def get_repos():
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT DISTINCT repo, source FROM scan_repos ORDER BY repo"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+def save_repo_sync_status(scan_id: int, source: str, repo: str, branch: str,
+                          commit_sha: str, local_path: str, file_count: int):
+    now = datetime.now().isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO repo_sync_status "
+            "(source,repo,branch,commit_sha,local_path,file_count,last_scan_id,synced_at) "
+            "VALUES (?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(source,repo) DO UPDATE SET "
+            "branch=excluded.branch, commit_sha=excluded.commit_sha, local_path=excluded.local_path, "
+            "file_count=excluded.file_count, last_scan_id=excluded.last_scan_id, synced_at=excluded.synced_at",
+            (source, repo, branch, commit_sha, local_path, file_count, scan_id, now)
+        )
+        conn.commit()
+
+def get_repo_sync_status():
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT source,repo,branch,commit_sha,local_path,file_count,last_scan_id,synced_at "
+            "FROM repo_sync_status ORDER BY source, repo"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+def replace_repo_components(scan_id: int, source: str, repo: str, components: list):
+    now = datetime.now().isoformat()
+    with get_conn() as conn:
+        conn.execute("DELETE FROM component_inventory WHERE source=? AND repo=?", (source, repo))
+        for c in components or []:
+            conn.execute(
+                "INSERT INTO component_inventory "
+                "(source,repo,ecosystem,component,version,manifest_file,raw_spec,last_scan_id,updated_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    source, repo,
+                    c.get('ecosystem', ''),
+                    c.get('component', ''),
+                    c.get('version', ''),
+                    c.get('manifest_file', ''),
+                    c.get('raw_spec', ''),
+                    scan_id, now
+                )
+            )
+        conn.commit()
+
+def query_components(keyword: str = '', repo: str = '', source: str = '',
+                     ecosystem: str = '', limit: int = 500):
+    limit = max(1, min(int(limit or 500), 2000))
+    q = (
+        "SELECT source,repo,ecosystem,component,version,manifest_file,raw_spec,last_scan_id,updated_at "
+        "FROM component_inventory WHERE 1=1"
+    )
+    params = []
+    if keyword:
+        q += " AND (component LIKE ? OR version LIKE ? OR manifest_file LIKE ?)"
+        kw = f'%{keyword}%'
+        params.extend([kw, kw, kw])
+    if repo:
+        q += " AND repo=?"
+        params.append(repo)
+    if source:
+        q += " AND source=?"
+        params.append(source)
+    if ecosystem:
+        q += " AND ecosystem=?"
+        params.append(ecosystem)
+    q += " ORDER BY source, repo, component LIMIT ?"
+    params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(q, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+def get_component_summary():
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT component, ecosystem, COUNT(DISTINCT source || ':' || repo) AS repo_count, "
+            "COUNT(*) AS hit_count "
+            "FROM component_inventory "
+            "GROUP BY component, ecosystem "
+            "ORDER BY repo_count DESC, hit_count DESC, component ASC "
+            "LIMIT 500"
         ).fetchall()
         return [dict(r) for r in rows]
 

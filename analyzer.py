@@ -99,22 +99,13 @@ def build_llm_caller(llm_cfg: dict):
     """
     根据配置构造调用函数 call_fn(prompt) -> str。
     支持 Anthropic SDK 及所有 OpenAI 兼容提供商。
-    配置优先级：provider/api_key/model > 旧版 deepseek_api_key / anthropic_api_key。
+    仅支持新版 provider/api_key/model/base_url 配置。
     返回 None 表示未配置任何 LLM。
     """
     provider = llm_cfg.get('provider', '').strip()
     api_key  = llm_cfg.get('api_key',  '').strip()
     model    = llm_cfg.get('model',    '').strip()
     base_url = llm_cfg.get('base_url', '').strip()
-
-    # 旧版兼容回退
-    if not provider:
-        if llm_cfg.get('deepseek_api_key', ''):
-            provider = 'deepseek'
-            api_key  = llm_cfg['deepseek_api_key']
-        elif llm_cfg.get('anthropic_api_key', ''):
-            provider = 'anthropic'
-            api_key  = llm_cfg['anthropic_api_key']
 
     if not provider:
         return None
@@ -123,8 +114,6 @@ def build_llm_caller(llm_cfg: dict):
     effective_model = model or pcfg.get('default_model', 'gpt-4o')
 
     if provider == 'anthropic':
-        if not api_key:
-            api_key = llm_cfg.get('anthropic_api_key', '')
         if not api_key:
             return None
         client = anthropic.Anthropic(api_key=api_key)
@@ -321,24 +310,14 @@ Respond ONLY with valid JSON (no markdown fences):
 def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
                    opensca_token='', semgrep_token='',
                    added_only=False, scan_type='full_audit',
-                   stop_event=None,
-                   # 旧版兼容参数
-                   deepseek_key='', anthropic_key=''):
+                   stop_event=None):
     """
     分析一次提交，返回 findings 列表（每条附带 fingerprint）。
 
-    新调用方式：analyze_commit(commit, llm_cfg={...}, ...)
-    旧调用方式（保持兼容）：analyze_commit(commit, deepseek_key, anthropic_key, max_diff, ...)
+    调用方式：analyze_commit(commit, llm_cfg={...}, ...)
     """
-    # 处理旧版调用 analyze_commit(commit, deepseek_key_str, ...)
-    if isinstance(llm_cfg, str):
-        deepseek_key = llm_cfg
-        llm_cfg = None
-
     if llm_cfg is None:
         llm_cfg = {}
-    if deepseek_key and not llm_cfg.get('provider'):
-        llm_cfg = {'deepseek_api_key': deepseek_key, 'anthropic_api_key': anthropic_key}
 
     if prompts is None:
         prompts = db.get_prompts_for_analysis()

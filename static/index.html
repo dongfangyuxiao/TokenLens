@@ -1238,6 +1238,7 @@ body.light .empty{
     <div class="nav-item" onclick="nav('ai')"><span class="icon">🤖</span>AI 配置</div>
     <div class="nav-item" onclick="nav('history')"><span class="icon">📋</span>扫描历史</div>
     <div class="nav-item" onclick="nav('stats')"><span class="icon">📈</span>漏洞统计</div>
+    <div class="nav-item" onclick="nav('emergency')"><span class="icon">🚨</span>应急排查</div>
     <div class="nav-item" onclick="nav('prompts')"><span class="icon">📝</span>提示词</div>
     <div class="nav-item" onclick="nav('whitelist')"><span class="icon">🛡️</span>误报白名单</div>
     <div class="nav-item" onclick="nav('users')"><span class="icon">👤</span>账户管理</div>
@@ -1462,7 +1463,7 @@ body.light .empty{
       <div class="card">
         <div class="card-title">AI 模型配置</div>
         <div style="font-size:13px;color:#888;margin-bottom:16px">
-          选择 LLM 提供商并填写 API Key；支持 DeepSeek、Qwen/通义、Claude、Ollama 等 10+ 种模型。
+          统一配置全局 LLM（支持本地模型与云端模型）。建议在下方“AI 配置列表”维护多模型，并在扫描时按任务选择。
         </div>
         <div class="form-row col2">
           <div class="form-group">
@@ -1507,21 +1508,6 @@ body.light .empty{
           <span id="llmSavedInfo" style="font-size:12px;color:#888"></span>
           <span id="llmTestResult" style="font-size:12px"></span>
         </div>
-
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0">
-          <div style="font-size:13px;font-weight:600;color:#555;margin-bottom:10px">旧版 API Key（保留兼容）</div>
-          <div class="form-row col2">
-            <div class="form-group">
-              <label>DeepSeek API Key</label>
-              <input id="deepseekKey" type="password" placeholder="sk-xxxxxxxxx">
-            </div>
-            <div class="form-group">
-              <label>Anthropic API Key</label>
-              <input id="anthropicKey" type="password" placeholder="sk-ant-xxxxxxxxx">
-            </div>
-          </div>
-          <button class="btn btn-default btn-sm" onclick="saveLegacyLLM()">保存旧版 Key</button>
-        </div>
       </div>
 
       <!-- AI 配置列表 -->
@@ -1531,7 +1517,7 @@ body.light .empty{
           <button class="btn btn-primary btn-sm" onclick="showProfileForm()">+ 添加配置</button>
         </div>
         <div style="font-size:13px;color:#888;margin-bottom:14px">
-          可配置多个 AI 模型，手动扫描和定时任务可独立选择使用哪个配置。
+          可配置多个本地/云端 AI 模型，投毒检测、增量审计、全量审计都可独立选择使用哪个配置。
         </div>
         <div id="llmProfileList"><div class="empty" style="padding:12px 0">暂无配置，点击右上角添加</div></div>
 
@@ -1629,6 +1615,76 @@ body.light .empty{
       <div class="card">
         <div class="card-title">明细数据</div>
         <div id="stats-table"></div>
+      </div>
+    </div>
+
+    <!-- 应急排查 -->
+    <div id="s-emergency" style="display:none">
+      <div class="card">
+        <div class="card-title">软件成分分析（SCA）</div>
+        <div style="font-size:13px;color:#888;margin-bottom:12px">数据来源于全量审计时同步的 main/master 分支快照。</div>
+        <div class="form-row col3">
+          <div class="form-group">
+            <label>组件关键字</label>
+            <input id="sca_keyword" placeholder="如：log4j / swagger / lodash">
+          </div>
+          <div class="form-group">
+            <label>仓库（可选）</label>
+            <input id="sca_repo" placeholder="如：org/repo">
+          </div>
+          <div class="form-group">
+            <label>来源（可选）</label>
+            <select id="sca_source">
+              <option value="">全部</option>
+              <option value="github">GitHub</option>
+              <option value="gitlab">GitLab</option>
+              <option value="bitbucket">Bitbucket</option>
+              <option value="gitee">Gitee</option>
+              <option value="tgit">TGit</option>
+              <option value="codeup">Codeup</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="queryComponents()">查询组件</button>
+          <button class="btn btn-default btn-sm" onclick="queryEmergencyDependency(false)">模糊检测恶意依赖</button>
+          <button class="btn btn-default btn-sm" onclick="queryEmergencyDependency(true)">精确检测恶意依赖</button>
+          <span id="sca_result_tip" style="font-size:12px;color:#888"></span>
+        </div>
+        <div id="sca_result" style="margin-top:12px"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">全代码库关键字排查</div>
+        <div class="form-row col3">
+          <div class="form-group">
+            <label>关键字</label>
+            <input id="em_keyword" placeholder="如：swagger.html">
+          </div>
+          <div class="form-group">
+            <label>仓库（可选）</label>
+            <input id="em_repo" placeholder="如：org/repo">
+          </div>
+          <div class="form-group">
+            <label>来源（可选）</label>
+            <select id="em_source">
+              <option value="">全部</option>
+              <option value="github">GitHub</option>
+              <option value="gitlab">GitLab</option>
+              <option value="bitbucket">Bitbucket</option>
+              <option value="gitee">Gitee</option>
+              <option value="tgit">TGit</option>
+              <option value="codeup">Codeup</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="em_case_sensitive"> 区分大小写</label>
+          <button class="btn btn-primary btn-sm" onclick="queryEmergencyCode()">全库检索</button>
+          <button class="btn btn-default btn-sm" onclick="loadRepoSyncStatus()">查看同步状态</button>
+          <span id="em_result_tip" style="font-size:12px;color:#888"></span>
+        </div>
+        <div id="em_result" style="margin-top:12px"></div>
       </div>
     </div>
 
@@ -2315,9 +2371,9 @@ body.light .empty{
 </div><!-- /#app -->
 
 <script>
-const PAGES = ['dashboard','accounts','repoowners','channels','instant','ai','history','stats','prompts','whitelist','users','settings'];
+const PAGES = ['dashboard','accounts','repoowners','channels','instant','ai','history','stats','emergency','prompts','whitelist','users','settings'];
 const PAGE_TITLES = {dashboard:'概览',accounts:'代码库配置',repoowners:'仓库负责人',channels:'通知渠道',
-  instant:'即时代码分析',ai:'AI 配置',history:'扫描历史',stats:'漏洞统计',prompts:'提示词管理',
+  instant:'即时代码分析',ai:'AI 配置',history:'扫描历史',stats:'漏洞统计',emergency:'应急排查',prompts:'提示词管理',
   whitelist:'误报白名单',users:'账户管理',settings:'系统设置'};
 let currentPage = 'dashboard';
 
@@ -2391,7 +2447,7 @@ function nav(page) {
   const PAGE_TITLES_NOW = {
     dashboard: t('nav.dashboard'), accounts: t('nav.accounts'), repoowners: t('nav.repoowners'),
     channels: t('nav.channels'), instant: t('nav.instant'), ai: t('nav.ai'),
-    history: t('nav.history'), stats: t('nav.stats'), prompts: t('nav.prompts'),
+    history: t('nav.history'), stats: t('nav.stats'), emergency: t('nav.emergency'), prompts: t('nav.prompts'),
     whitelist: t('nav.whitelist'), users: t('nav.users'), settings: t('nav.settings'),
   };
   document.getElementById('pageTitle').textContent = PAGE_TITLES_NOW[page] || PAGE_TITLES[page];
@@ -2406,6 +2462,7 @@ function loadPage(p) {
   if (p === 'ai')         { loadLLM(); loadLLMProfiles(); }
   if (p === 'history')    { loadHistory(); }
   if (p === 'stats')      { initStats(); }
+  if (p === 'emergency')  { queryComponents(); loadRepoSyncStatus(); }
   if (p === 'prompts')    { loadPrompts(); }
   if (p === 'whitelist')  { loadWhitelist(); }
   if (p === 'instant')    { /* no pre-load needed */ }
@@ -3365,9 +3422,6 @@ async function loadLLM() {
   const info = document.getElementById('llmSavedInfo');
   info.textContent = cfg.api_key && cfg.api_key !== '****' ? `当前 Key: ${cfg.api_key}` :
                      (cfg.provider ? '已配置 API Key' : '');
-  // 旧版
-  document.getElementById('deepseekKey').placeholder  = cfg.deepseek_api_key  || '未配置';
-  document.getElementById('anthropicKey').placeholder = cfg.anthropic_api_key || '未配置';
 }
 
 async function saveLLM() {
@@ -3419,7 +3473,11 @@ function renderProfileList() {
 }
 
 function populateProfileSelects() {
-  const opts = _llmProfiles.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  const opts = _llmProfiles.map(p => {
+    const provider = p.provider || 'unknown';
+    const model = p.model || 'default';
+    return `<option value="${p.id}">${esc(p.name)} [${esc(provider)}/${esc(model)}]</option>`;
+  }).join('');
   ['scanModalLlm','newSched-poison-llm','newSched-incremental_audit-llm','newSched-full_audit-llm'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -3510,16 +3568,6 @@ async function testLLM() {
     el.style.color = '#ff4d4f';
     el.textContent = '✗ ' + (e.message || '连接失败');
   }
-}
-
-async function saveLegacyLLM() {
-  const dk = document.getElementById('deepseekKey').value.trim();
-  const ak = document.getElementById('anthropicKey').value.trim();
-  await api('POST', '/api/llm-config', {deepseek_api_key: dk, anthropic_api_key: ak});
-  toast('旧版 Key 已保存');
-  document.getElementById('deepseekKey').value  = '';
-  document.getElementById('anthropicKey').value = '';
-  loadLLM();
 }
 
 // ── 扫描历史 ──────────────────────────────────────────────────────
@@ -4132,6 +4180,93 @@ function renderStatsTable(data, period) {
     </tbody></table>`;
 }
 
+// ── 应急排查 / SCA ───────────────────────────────────────────────
+function _renderSimpleTable(elId, columns, rows) {
+  const el = document.getElementById(elId);
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div class="empty" style="padding:16px 0">无匹配结果</div>';
+    return;
+  }
+  const thead = columns.map(c => `<th>${c.label}</th>`).join('');
+  const tbody = rows.map(r => `<tr>${columns.map(c => `<td>${esc(String(r[c.key] ?? ''))}</td>`).join('')}</tr>`).join('');
+  el.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+}
+
+async function queryComponents() {
+  const keyword = document.getElementById('sca_keyword').value.trim();
+  const repo = document.getElementById('sca_repo').value.trim();
+  const source = document.getElementById('sca_source').value;
+  const url = `/api/components?keyword=${encodeURIComponent(keyword)}&repo=${encodeURIComponent(repo)}&source=${encodeURIComponent(source)}&limit=200`;
+  const rows = await api('GET', url).catch(() => []);
+  document.getElementById('sca_result_tip').textContent = `共 ${rows.length} 条`;
+  _renderSimpleTable('sca_result', [
+    {key:'source',label:'来源'},
+    {key:'repo',label:'仓库'},
+    {key:'ecosystem',label:'生态'},
+    {key:'component',label:'组件'},
+    {key:'version',label:'版本'},
+    {key:'manifest_file',label:'清单文件'},
+  ], rows);
+}
+
+async function queryEmergencyDependency(exact) {
+  const keyword = document.getElementById('sca_keyword').value.trim();
+  if (!keyword) { toast('请先输入依赖关键字', true); return; }
+  const body = {
+    keyword,
+    exact,
+    repo: document.getElementById('sca_repo').value.trim(),
+    source: document.getElementById('sca_source').value,
+    limit: 300,
+  };
+  const r = await api('POST', '/api/emergency/dependency-check', body).catch(e => ({hits:[],total:0,error:e.message}));
+  if (r.error) { toast(r.error, true); return; }
+  document.getElementById('sca_result_tip').textContent = `命中 ${r.total} 条`;
+  _renderSimpleTable('sca_result', [
+    {key:'source',label:'来源'},
+    {key:'repo',label:'仓库'},
+    {key:'ecosystem',label:'生态'},
+    {key:'component',label:'组件'},
+    {key:'version',label:'版本'},
+    {key:'manifest_file',label:'清单文件'},
+  ], r.hits || []);
+}
+
+async function queryEmergencyCode() {
+  const keyword = document.getElementById('em_keyword').value.trim();
+  if (!keyword) { toast('请输入检索关键词', true); return; }
+  const body = {
+    keyword,
+    repo: document.getElementById('em_repo').value.trim(),
+    source: document.getElementById('em_source').value,
+    case_sensitive: !!document.getElementById('em_case_sensitive').checked,
+    limit: 200,
+  };
+  const r = await api('POST', '/api/emergency/code-search', body).catch(e => ({hits:[],total:0,error:e.message}));
+  if (r.error) { toast(r.error, true); return; }
+  document.getElementById('em_result_tip').textContent = `命中 ${r.total} 处`;
+  _renderSimpleTable('em_result', [
+    {key:'source',label:'来源'},
+    {key:'repo',label:'仓库'},
+    {key:'file',label:'文件'},
+    {key:'line',label:'行号'},
+    {key:'snippet',label:'命中行'},
+  ], r.hits || []);
+}
+
+async function loadRepoSyncStatus() {
+  const rows = await api('GET', '/api/repo-sync-status').catch(() => []);
+  document.getElementById('em_result_tip').textContent = `已同步仓库 ${rows.length} 个`;
+  _renderSimpleTable('em_result', [
+    {key:'source',label:'来源'},
+    {key:'repo',label:'仓库'},
+    {key:'branch',label:'分支'},
+    {key:'commit_sha',label:'Commit'},
+    {key:'file_count',label:'文件数'},
+    {key:'synced_at',label:'同步时间'},
+  ], (rows || []).map(r => ({...r, commit_sha: (r.commit_sha || '').slice(0, 12)})));
+}
+
 // ── 提示词管理 ──────────────────────────────────────────────────────
 const CATEGORY_LABEL = {frontend:'前端',backend:'后端',contract:'合约',custom:'自定义'};
 const CATEGORY_COLOR = {
@@ -4469,7 +4604,7 @@ const _T = {
   zh: {
     'nav.dashboard':'概览','nav.accounts':'代码库配置','nav.repoowners':'仓库负责人',
     'nav.channels':'通知渠道','nav.instant':'即时分析','nav.ai':'AI 配置',
-    'nav.history':'扫描历史','nav.stats':'漏洞统计','nav.prompts':'提示词',
+    'nav.history':'扫描历史','nav.stats':'漏洞统计','nav.emergency':'应急排查','nav.prompts':'提示词',
     'nav.whitelist':'误报白名单','nav.users':'账户管理','nav.settings':'系统设置',
     'nav.poison':'投毒检测','nav.inc':'增量审计','nav.full':'全量审计',
     'sidebar.control':'控制节点','sidebar.system':'系统','sidebar.mode':'模式',
@@ -4487,7 +4622,7 @@ const _T = {
   en: {
     'nav.dashboard':'Dashboard','nav.accounts':'Code Repos','nav.repoowners':'Repo Owners',
     'nav.channels':'Channels','nav.instant':'Instant Analysis','nav.ai':'AI Config',
-    'nav.history':'Scan History','nav.stats':'Statistics','nav.prompts':'Prompts',
+    'nav.history':'Scan History','nav.stats':'Statistics','nav.emergency':'Emergency','nav.prompts':'Prompts',
     'nav.whitelist':'False Positive List','nav.users':'User Management','nav.settings':'Settings',
     'nav.poison':'Poison Detect','nav.inc':'Incremental Audit','nav.full':'Full Audit',
     'sidebar.control':'Control Node','sidebar.system':'System','sidebar.mode':'Mode',
@@ -4519,7 +4654,7 @@ function applyLang() {
   const navMap = [
     ['dashboard','nav.dashboard'],['accounts','nav.accounts'],['repoowners','nav.repoowners'],
     ['channels','nav.channels'],['instant','nav.instant'],['ai','nav.ai'],
-    ['history','nav.history'],['stats','nav.stats'],['prompts','nav.prompts'],
+    ['history','nav.history'],['stats','nav.stats'],['emergency','nav.emergency'],['prompts','nav.prompts'],
     ['whitelist','nav.whitelist'],['users','nav.users'],['settings','nav.settings'],
   ];
   document.querySelectorAll('.nav-item').forEach((el, i) => {
@@ -4532,7 +4667,7 @@ function applyLang() {
   const PAGE_TITLES_I18N = {
     dashboard: t('nav.dashboard'), accounts: t('nav.accounts'), repoowners: t('nav.repoowners'),
     channels: t('nav.channels'), instant: t('nav.instant'), ai: t('nav.ai'),
-    history: t('nav.history'), stats: t('nav.stats'), prompts: t('nav.prompts'),
+    history: t('nav.history'), stats: t('nav.stats'), emergency: t('nav.emergency'), prompts: t('nav.prompts'),
     whitelist: t('nav.whitelist'), users: t('nav.users'), settings: t('nav.settings'),
   };
   const titleEl = document.getElementById('pageTitle');

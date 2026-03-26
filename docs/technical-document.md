@@ -1,7 +1,7 @@
 # 春静企业代码安全平台 — 产品技术文档
 
-**版本**：v2.1
-**更新日期**：2026-03-26
+**版本**：v2.2
+**更新日期**：2026-03-27
 **仓库地址**：https://github.com/dongfangyuxiao/SpringStillness
 
 ---
@@ -24,6 +24,7 @@
 14. [依赖说明](#14-依赖说明)
 15. [版本变更记录](#15-版本变更记录)
 16. [2026-03-26 本次更新](#16-2026-03-26-本次更新)
+17. [2026-03-27 本次更新](#17-2026-03-27-本次更新)
 
 ---
 
@@ -91,7 +92,9 @@ SpringStillness/
 ├── analyzer.py             # LLM / Semgrep / OpenSCA 分析引擎
 ├── database.py             # SQLite 数据访问层，DDL 与所有 CRUD
 ├── license_manager.py      # 产品授权签发 / 校验工具
+├── repo_sync.py            # 全量扫描代码快照同步 + 跨仓库关键词检索
 ├── reporter.py             # 报告生成（Markdown / JSON / HTML）
+├── sbom.py                 # 依赖清单解析（SCA 组件提取）
 ├── notifier.py             # 多渠道通知发送
 ├── syslog_sender.py        # Syslog UDP/TCP 转发
 ├── default_prompts.py      # 内置安全审计 Prompt 模板
@@ -100,6 +103,7 @@ SpringStillness/
 ├── static/
 │   └── index.html          # 前端单文件 SPA
 ├── reports/                # 生成的报告文件（运行时生成）
+├── synced_repos/           # 全量扫描同步下来的仓库代码快照（运行时生成）
 ├── clients/
 │   ├── github.py           # GitHub API 客户端
 │   ├── gitlab.py           # GitLab API 客户端（含腾讯工蜂 / 阿里 Codeup）
@@ -289,6 +293,33 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 | error_msg | TEXT | 异常信息 |
 | llm_profile_id | INTEGER | 使用的 LLM 配置（NULL = 系统默认） |
 
+#### `repo_sync_status` — 代码快照同步状态
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER PK | 自增主键 |
+| source | TEXT | 平台来源 |
+| repo | TEXT | 仓库路径 |
+| branch | TEXT | 同步分支（main/master） |
+| commit_sha | TEXT | 对应提交 |
+| local_path | TEXT | 本地同步路径 |
+| file_count | INTEGER | 同步文件数 |
+| last_scan_id | INTEGER | 最后一次同步所属扫描 |
+| synced_at | TEXT | 同步时间 |
+
+#### `component_inventory` — 软件成分清单
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | INTEGER PK | 自增主键 |
+| source | TEXT | 平台来源 |
+| repo | TEXT | 仓库路径 |
+| ecosystem | TEXT | 生态（pypi/npm/maven 等） |
+| component | TEXT | 组件名 |
+| version | TEXT | 版本或版本约束 |
+| manifest_file | TEXT | 依赖清单文件路径 |
+| raw_spec | TEXT | 原始依赖声明 |
+| last_scan_id | INTEGER | 最后一次更新所属扫描 |
+| updated_at | TEXT | 更新时间 |
+
 #### `findings` — 漏洞记录
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -345,7 +376,7 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 | 表 | 说明 |
 |----|------|
 | `app_config` | 系统参数，如 `max_diff_chars`、`opensca_token`、`semgrep_token`、`license_key`、`license_enforce_enabled` |
-| `llm_config` | 系统默认 LLM 配置及旧版兼容字段 |
+| `llm_config` | 系统默认 LLM 配置（`provider/model/api_key/base_url`） |
 | `syslog_config` | Syslog 主机、端口、协议和 app_name |
 
 #### `prompts` — Prompt 模板
@@ -395,7 +426,7 @@ Authorization: Bearer <token>
 | PUT | `/api/llm-profiles/{id}` | 更新 LLM 配置 |
 | DELETE | `/api/llm-profiles/{id}` | 删除 LLM 配置 |
 | POST | `/api/llm-profiles/{id}/test` | 测试 LLM 连通性 |
-| GET | `/api/llm-config` | 获取系统默认 LLM 配置（旧接口兼容） |
+| GET | `/api/llm-config` | 获取系统默认 LLM 配置 |
 | POST | `/api/llm-config` | 设置系统默认 LLM 配置 |
 
 ### 扫描控制
@@ -413,6 +444,16 @@ Authorization: Bearer <token>
 | GET | `/api/scans/{id}/findings` | 获取某次扫描的漏洞列表 |
 | GET | `/api/scans/{id}/logs` | 获取某次扫描的执行日志 |
 | GET | `/api/scans/{id}/export?format=json|markdown|docx` | 导出扫描结果 |
+
+### SCA 与应急排查
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/repo-sync-status` | 查看全量扫描代码快照同步状态 |
+| GET | `/api/components` | 查询组件清单（支持关键词/仓库/来源过滤） |
+| GET | `/api/components/summary` | 组件聚合统计 |
+| POST | `/api/emergency/dependency-check` | 应急依赖排查（模糊/精确） |
+| POST | `/api/emergency/code-search` | 全代码库关键词检索（如 `swagger.html`） |
 
 ### 漏洞管理
 
@@ -752,6 +793,17 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 - 恢复 Light / Dark 双主题切换，并补齐代码库配置、扫描历史、漏洞统计、提示词、账户管理、系统设置等页面的浅色样式
 - 继续收紧视觉体系，压低粉色/绿色倾向，增强登录页冷色氛围、左侧导航和概览页的控制台层次
 - 技术文档、使用手册、README 与更新日志同步校正数据库表名、API 路径、系统设置项和当前实现说明
+
+## 17. 2026-03-27 本次更新
+
+- LLM 配置统一为新版字段：`provider/model/api_key/base_url`
+- 已移除旧版 `deepseek_api_key` / `anthropic_api_key` 的前后端展示与保存逻辑
+- AI 配置支持本地模型与云端模型统一多模型管理
+- 投毒检测、增量审计、全量审计均支持手动触发和计划任务绑定独立 `llm_profile_id`
+- 修复扫描记录创建时未写入 `llm_profile_id` 的问题
+- 新增全量扫描代码快照同步（`synced_repos/`）与同步状态表（`repo_sync_status`）
+- 新增软件成分清单表（`component_inventory`）与组件查询接口
+- 新增应急排查接口：恶意依赖检测与全代码库关键词检索
 
 ### v1.0（初始版本）
 

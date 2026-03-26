@@ -112,6 +112,7 @@ def fetch_recent_changes(token, base_url='https://gitlab.com', since_iso=None):
             results.append({
                 'source'      : 'gitlab',
                 'repo'        : name,
+                'branch'      : branch,
                 'commit_sha'  : head_sha,
                 'commit_url'  : f'{base_url}/{name}/-/commit/{head_sha}',
                 'author'      : author,
@@ -133,6 +134,7 @@ def fetch_recent_changes(token, base_url='https://gitlab.com', since_iso=None):
                 results.append({
                     'source'      : 'gitlab',
                     'repo'        : f'{name}({br_name})',
+                    'branch'      : br_name,
                     'commit_sha'  : head_sha,
                     'commit_url'  : f'{base_url}/{name}/-/tree/{br_name}',
                     'author'      : author,

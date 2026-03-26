@@ -10,6 +10,8 @@ from reporter  import build_report
 from notifier  import notify_all
 import database as db
 import syslog_sender as syslog
+from repo_sync import sync_repo_snapshot, normalize_repo_name
+from sbom import extract_components_from_files
 
 REPORTS_DIR = 'reports'
 
@@ -74,7 +76,7 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
     if full_scan and scan_type == 'incremental_audit':
         scan_type = 'full_audit'
 
-    scan_id = db.create_scan(scan_type=scan_type)
+    scan_id = db.create_scan(scan_type=scan_type, llm_profile_id=llm_profile_id)
 
     _MODE_LABELS = {
         'poison'           : '增量扫描(投毒/供应链)',
@@ -133,11 +135,6 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
 
         # 打印当前使用的 LLM 提供商
         provider = llm_cfg.get('provider', '')
-        if not provider:
-            if llm_cfg.get('deepseek_api_key'):
-                provider = 'deepseek (legacy)'
-            elif llm_cfg.get('anthropic_api_key'):
-                provider = 'anthropic (legacy)'
         log('info', f'LLM 提供商: {provider or "未配置（使用静态扫描）"}')
         if whitelist:
             log('info', f'白名单条目: {len(whitelist)} 条')
@@ -182,6 +179,31 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
             if not items:
                 log('info', '  无新提交，跳过')
                 continue
+
+            if scan_type == 'full_audit':
+                for snapshot in items:
+                    try:
+                        source = snapshot.get('source', '')
+                        repo_name = normalize_repo_name(snapshot.get('repo', ''))
+                        files = snapshot.get('files', []) or []
+                        branch = snapshot.get('branch', 'main')
+                        local_path, file_count = sync_repo_snapshot(source, repo_name, files)
+                        db.save_repo_sync_status(
+                            scan_id=scan_id,
+                            source=source,
+                            repo=repo_name,
+                            branch=branch,
+                            commit_sha=snapshot.get('commit_sha', ''),
+                            local_path=local_path,
+                            file_count=file_count,
+                        )
+
+                        components = extract_components_from_files(files)
+                        db.replace_repo_components(scan_id, source, repo_name, components)
+                        log('info', f'  [同步] {source}/{repo_name} -> {local_path} ({file_count} 文件)')
+                        log('info', f'  [SCA] {source}/{repo_name} 识别组件 {len(components)} 个')
+                    except Exception as e:
+                        log('warning', f'  同步或组件分析失败 {snapshot.get("repo","")}: {e}')
 
             # 按仓库聚合，同一文件只保留最新版本
             deduped = _dedup_files_by_repo(items)

@@ -14,6 +14,7 @@ from scanner import run_scan
 from reporter import build_markdown_report, build_json_report
 from notifier import test_channel as notifier_test_channel
 import syslog_sender as syslog
+from repo_sync import search_synced_code, normalize_repo_name
 from clients.github    import test_connection as github_test
 from clients.gitlab    import test_connection as gitlab_test
 from clients.bitbucket import test_connection as bitbucket_test
@@ -426,21 +427,19 @@ def test_llm_profile(pid: int, _: str = Depends(require_auth)):
     except Exception as e:
         raise HTTPException(502, str(e))
 
-_SENSITIVE_LLM_KEYS = {'deepseek_api_key', 'anthropic_api_key', 'api_key'}
+_SENSITIVE_LLM_KEYS = {'api_key'}
 
 class LLMConfig(BaseModel):
-    # 新版通用配置
     provider : str = ''
     model    : str = ''
     api_key  : str = ''
     base_url : str = ''
-    # 旧版兼容
-    deepseek_api_key : str = ''
-    anthropic_api_key: str = ''
 
 @app.get('/api/llm-config')
 def get_llm(_: str = Depends(require_auth)):
     cfg = db.get_llm_config()
+    # 仅返回新版字段，隐藏旧版兼容字段
+    cfg = {k: cfg.get(k, '') for k in ('provider', 'model', 'api_key', 'base_url')}
     def mask(k, v):
         if k in _SENSITIVE_LLM_KEYS:
             return v[:8] + '****' if len(v) > 8 else ('****' if v else '')
@@ -449,7 +448,6 @@ def get_llm(_: str = Depends(require_auth)):
 
 @app.post('/api/llm-config')
 def save_llm(body: LLMConfig, _: str = Depends(require_auth)):
-    # 新版字段
     if body.provider is not None:
         db.set_llm_config('provider', body.provider)
     if body.model is not None:
@@ -458,11 +456,6 @@ def save_llm(body: LLMConfig, _: str = Depends(require_auth)):
         db.set_llm_config('base_url', body.base_url)
     if body.api_key and '****' not in body.api_key:
         db.set_llm_config('api_key', body.api_key)
-    # 旧版兼容字段
-    if body.deepseek_api_key and '****' not in body.deepseek_api_key:
-        db.set_llm_config('deepseek_api_key', body.deepseek_api_key)
-    if body.anthropic_api_key and '****' not in body.anthropic_api_key:
-        db.set_llm_config('anthropic_api_key', body.anthropic_api_key)
     return {'ok': True}
 
 @app.post('/api/llm-config/test')
@@ -811,6 +804,71 @@ def get_stats_api(period: str = 'day', repo: str = 'all', _: str = Depends(requi
 @app.get('/api/repos')
 def list_repos(_: str = Depends(require_auth)):
     return db.get_repos()
+
+@app.get('/api/repo-sync-status')
+def repo_sync_status(_: str = Depends(require_auth)):
+    return db.get_repo_sync_status()
+
+@app.get('/api/components')
+def list_components(keyword: str = '', repo: str = '', source: str = '',
+                    ecosystem: str = '', limit: int = 500,
+                    _: str = Depends(require_auth)):
+    return db.query_components(keyword=keyword, repo=repo, source=source,
+                               ecosystem=ecosystem, limit=limit)
+
+@app.get('/api/components/summary')
+def component_summary(_: str = Depends(require_auth)):
+    return db.get_component_summary()
+
+class EmergencyDependencyIn(BaseModel):
+    keyword: str
+    exact: bool = False
+    source: str = ''
+    repo: str = ''
+    ecosystem: str = ''
+    limit: int = 500
+
+@app.post('/api/emergency/dependency-check')
+def emergency_dependency_check(body: EmergencyDependencyIn, _: str = Depends(require_auth)):
+    keyword = body.keyword.strip()
+    if not keyword:
+        raise HTTPException(400, '依赖关键字不能为空')
+    rows = db.query_components(
+        keyword='' if body.exact else keyword,
+        repo=normalize_repo_name(body.repo),
+        source=body.source.strip(),
+        ecosystem=body.ecosystem.strip(),
+        limit=body.limit,
+    )
+    if body.exact:
+        rows = [r for r in rows if (r.get('component', '').lower() == keyword.lower())]
+    return {
+        'keyword': keyword,
+        'exact': body.exact,
+        'total': len(rows),
+        'hits': rows,
+    }
+
+class EmergencyCodeSearchIn(BaseModel):
+    keyword: str
+    case_sensitive: bool = False
+    source: str = ''
+    repo: str = ''
+    limit: int = 200
+
+@app.post('/api/emergency/code-search')
+def emergency_code_search(body: EmergencyCodeSearchIn, _: str = Depends(require_auth)):
+    keyword = body.keyword.strip()
+    if not keyword:
+        raise HTTPException(400, '检索关键词不能为空')
+    hits = search_synced_code(
+        keyword=keyword,
+        case_sensitive=body.case_sensitive,
+        source=body.source.strip(),
+        repo=normalize_repo_name(body.repo),
+        limit=body.limit,
+    )
+    return {'keyword': keyword, 'total': len(hits), 'hits': hits}
 
 # ── 仓库负责人 API ────────────────────────────────────────────────
 class RepoOwnerIn(BaseModel):

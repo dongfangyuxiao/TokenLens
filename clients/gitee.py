@@ -107,6 +107,7 @@ def fetch_recent_changes(token, owner='', since_iso=None):
             results.append({
                 'source'      : 'gitee',
                 'repo'        : f'{repo_owner}/{repo_name}',
+                'branch'      : branch,
                 'commit_sha'  : head_sha,
                 'commit_url'  : f'https://gitee.com/{repo_owner}/{repo_name}/commit/{head_sha}',
                 'author'      : author,
@@ -128,6 +129,7 @@ def fetch_recent_changes(token, owner='', since_iso=None):
                 results.append({
                     'source'      : 'gitee',
                     'repo'        : f'{repo_owner}/{repo_name}({br_name})',
+                    'branch'      : br_name,
                     'commit_sha'  : head_sha,
                     'commit_url'  : f'https://gitee.com/{repo_owner}/{repo_name}/tree/{br_name}',
                     'author'      : author,
