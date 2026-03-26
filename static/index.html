@@ -595,10 +595,10 @@ body.dark .btn-default,body.dark .btn-icon{
 }
 #login-page .login-bg-text span{
   background:none !important;
-  -webkit-text-fill-color:rgba(152,223,255,.12);
-  color:rgba(152,223,255,.12) !important;
+  -webkit-text-fill-color:rgba(181,233,255,.28);
+  color:rgba(181,233,255,.28) !important;
   filter:none !important;
-  text-shadow:0 0 18px rgba(88,230,255,.12),0 0 42px rgba(91,140,255,.08);
+  text-shadow:0 0 18px rgba(88,230,255,.18),0 0 42px rgba(91,140,255,.12);
 }
 .login-glow{
   filter:blur(110px);
@@ -615,8 +615,9 @@ body.dark .btn-default,body.dark .btn-icon{
     linear-gradient(180deg,rgba(6,18,31,.9),rgba(5,14,25,.95)) !important;
 }
 .login-logo-text{
-  background:linear-gradient(135deg,#f5fbff 0%,#7cecff 42%,#5b8cff 100%) !important;
+  background:linear-gradient(135deg,#ffffff 0%,#bff4ff 42%,#7aa8ff 100%) !important;
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  text-shadow:0 0 18px rgba(88,230,255,.18);
 }
 .login-logo svg{
   filter:drop-shadow(0 0 16px rgba(88,230,255,.24));
@@ -896,6 +897,126 @@ nav::before{
   letter-spacing:.12em;
   text-transform:uppercase;
 }
+body.light{
+  color:#102033;
+  background:
+    radial-gradient(circle at 10% 16%,rgba(91,140,255,.1),transparent 24%),
+    radial-gradient(circle at 86% 14%,rgba(88,230,255,.12),transparent 24%),
+    linear-gradient(145deg,#eef6ff,#f8fbff 46%,#edf5fb 100%);
+}
+body.light::before{
+  background-image:
+    linear-gradient(rgba(59,130,246,.05) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(59,130,246,.05) 1px,transparent 1px);
+}
+body.light .sidebar{
+  background:
+    radial-gradient(circle at 12% 10%,rgba(91,140,255,.12),transparent 22%),
+    linear-gradient(180deg,rgba(244,249,255,.98),rgba(235,244,252,.98) 42%,rgba(228,238,248,1));
+  border-right:1px solid rgba(59,130,246,.12);
+  box-shadow:inset -1px 0 0 rgba(255,255,255,.6),20px 0 48px rgba(148,163,184,.12);
+}
+body.light .sidebar::before{
+  background:
+    linear-gradient(180deg,rgba(91,140,255,.08),transparent 16%,transparent 84%,rgba(88,230,255,.08)),
+    repeating-linear-gradient(180deg,transparent 0 24px,rgba(59,130,246,.035) 24px 25px);
+}
+body.light .sidebar::after{
+  background:linear-gradient(180deg,transparent,rgba(59,130,246,.55),rgba(88,230,255,.5),transparent);
+  box-shadow:0 0 16px rgba(59,130,246,.15);
+}
+body.light .logo,
+body.light .sidebar-footer,
+body.light .card,
+body.light .stat-card,
+body.light .modal{
+  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(244,249,255,.96)) !important;
+  border-color:rgba(59,130,246,.12) !important;
+  box-shadow:0 16px 36px rgba(148,163,184,.12),inset 0 1px 0 rgba(255,255,255,.8);
+}
+body.light .topbar{
+  background:rgba(255,255,255,.82) !important;
+  border-bottom:1px solid rgba(59,130,246,.12);
+  box-shadow:0 10px 24px rgba(148,163,184,.1);
+}
+body.light .page-title,
+body.light .card-title,
+body.light .modal-title,
+body.light .dashboard-headline,
+body.light .dashboard-pill-value,
+body.light .dashboard-summary-item .value,
+body.light .sidebar-footer-value,
+body.light .fd-meta-value,
+body.light .fd-person-name{
+  color:#102033 !important;
+}
+body.light #statusText,
+body.light .stat-label,
+body.light label,
+body.light .empty,
+body.light th,
+body.light .fd-section-title,
+body.light .fd-meta-label,
+body.light .scan-modal-desc,
+body.light .dashboard-kicker,
+body.light .dashboard-subline,
+body.light .dashboard-pill-label,
+body.light .dashboard-table-tag,
+body.light .dashboard-summary-item .label,
+body.light .sidebar-footer-title,
+body.light .sidebar-footer-label,
+body.light .logo-name-sub{
+  color:#5b728b !important;
+}
+body.light .nav-item{
+  color:#30475f;
+  background:linear-gradient(90deg,rgba(59,130,246,.035),rgba(255,255,255,.35));
+}
+body.light .nav-item .icon{
+  background:linear-gradient(180deg,rgba(59,130,246,.1),rgba(88,230,255,.08));
+  border-color:rgba(59,130,246,.12);
+}
+body.light .nav-item:hover{
+  color:#102033;
+  border-color:rgba(59,130,246,.12);
+  background:linear-gradient(90deg,rgba(59,130,246,.08),rgba(88,230,255,.05));
+}
+body.light .nav-item.active{
+  color:#0b1c30;
+  border-color:rgba(59,130,246,.16);
+  background:linear-gradient(90deg,rgba(59,130,246,.16),rgba(88,230,255,.08) 55%,rgba(255,255,255,.4));
+}
+body.light .dashboard-hero{
+  background:
+    radial-gradient(circle at 82% 18%,rgba(88,230,255,.14),transparent 20%),
+    radial-gradient(circle at 18% 82%,rgba(91,140,255,.12),transparent 24%),
+    linear-gradient(135deg,rgba(255,255,255,.96),rgba(241,248,255,.96));
+  border-color:rgba(59,130,246,.14);
+  box-shadow:0 20px 40px rgba(148,163,184,.12),inset 0 1px 0 rgba(255,255,255,.9);
+}
+body.light .dashboard-pill,
+body.light .dashboard-summary-item{
+  background:rgba(59,130,246,.04);
+  border-color:rgba(59,130,246,.08);
+}
+body.light table td{
+  color:#1e334a;
+  border-bottom:1px solid rgba(148,163,184,.12);
+}
+body.light tr:hover td{background:rgba(59,130,246,.035)}
+body.light input,body.light select,body.light textarea,body.light .btn-default,body.light .btn-icon{
+  background:rgba(255,255,255,.9);
+  color:#102033;
+  border-color:rgba(59,130,246,.14);
+}
+body.light input::placeholder,body.light textarea::placeholder{color:#7b90a8}
+body.light .btn-default,body.light .btn-icon{
+  color:#1d3551;
+}
+body.light .btn-default:hover,body.light .btn-icon:hover{
+  background:#f4f9ff;
+  border-color:rgba(59,130,246,.2);
+}
 @media (max-width: 1100px){
   body{overflow:auto;height:auto;min-height:100vh}
   #app{min-height:100vh;height:auto;flex-direction:column!important}
@@ -1009,7 +1130,7 @@ nav::before{
   </div>
   <nav>
     <div class="nav-item active" onclick="nav('dashboard')"><span class="icon">📊</span>概览</div>
-    <div class="nav-item" onclick="nav('accounts')"><span class="icon">🔑</span>账户配置</div>
+    <div class="nav-item" onclick="nav('accounts')"><span class="icon">🔑</span>代码库配置</div>
     <div class="nav-item" onclick="nav('repoowners')"><span class="icon">👥</span>仓库负责人</div>
     <div class="nav-item" onclick="nav('channels')"><span class="icon">🔔</span>通知渠道</div>
     <div class="nav-item" onclick="nav('instant')"><span class="icon">⚡</span>即时分析</div>
@@ -1022,14 +1143,14 @@ nav::before{
     <div class="nav-item" onclick="nav('settings')"><span class="icon">⚙️</span>系统设置</div>
   </nav>
   <div class="sidebar-footer">
-    <div class="sidebar-footer-title">Control Node</div>
+    <div class="sidebar-footer-title" data-i18n="sidebar.control">Control Node</div>
     <div class="sidebar-footer-grid">
       <div class="sidebar-footer-item">
-        <div class="sidebar-footer-label">System</div>
+        <div class="sidebar-footer-label" data-i18n="sidebar.system">System</div>
         <div class="sidebar-footer-value" id="sidebarState">Idle</div>
       </div>
       <div class="sidebar-footer-item">
-        <div class="sidebar-footer-label">Mode</div>
+        <div class="sidebar-footer-label" data-i18n="sidebar.mode">Mode</div>
         <div class="sidebar-footer-value">SOC</div>
       </div>
     </div>
@@ -1060,9 +1181,9 @@ nav::before{
       <div class="dashboard-hero">
         <div class="dashboard-hero-top">
           <div>
-            <div class="dashboard-kicker">Security Operations Grid</div>
-            <div class="dashboard-headline">代码风险态势总览</div>
-            <div class="dashboard-subline">
+            <div class="dashboard-kicker" data-i18n="dash.kicker">Security Operations Grid</div>
+            <div class="dashboard-headline" data-i18n="dash.headline">代码风险态势总览</div>
+            <div class="dashboard-subline" data-i18n="dash.subline">
               聚合最近审计结果、计划任务节奏与运行状态，用于快速识别当前风险密度、执行节拍和扫描链路是否处于健康状态。
             </div>
           </div>
@@ -1070,19 +1191,19 @@ nav::before{
         </div>
         <div class="dashboard-pills">
           <div class="dashboard-pill">
-            <div class="dashboard-pill-label">Node Status</div>
+            <div class="dashboard-pill-label" data-i18n="dash.nodeStatus">Node Status</div>
             <div class="dashboard-pill-value" id="heroScanState">IDLE</div>
           </div>
           <div class="dashboard-pill">
-            <div class="dashboard-pill-label">Detection Scope</div>
+            <div class="dashboard-pill-label" data-i18n="dash.scope">Detection Scope</div>
             <div class="dashboard-pill-value">MULTI-REPO</div>
           </div>
           <div class="dashboard-pill">
-            <div class="dashboard-pill-label">Analysis Stack</div>
+            <div class="dashboard-pill-label" data-i18n="dash.stack">Analysis Stack</div>
             <div class="dashboard-pill-value">LLM / SAST / SCA</div>
           </div>
           <div class="dashboard-pill">
-            <div class="dashboard-pill-label">Last Refresh</div>
+            <div class="dashboard-pill-label" data-i18n="dash.lastRefresh">Last Refresh</div>
             <div class="dashboard-pill-value" id="heroLastUpdate">--:--:--</div>
           </div>
         </div>
@@ -1096,26 +1217,26 @@ nav::before{
       <div class="card dashboard-summary-card">
         <div class="dashboard-summary-grid">
           <div class="dashboard-summary-item">
-            <span class="label">🛡️ 投毒检测</span>
+            <span class="label" data-i18n="dash.poison">🛡️ 投毒检测</span>
             <span class="value" id="dash-poison-summary">—</span>
           </div>
           <div class="dashboard-summary-item">
-            <span class="label">🔍 增量代码审计</span>
+            <span class="label" data-i18n="dash.incremental">🔍 增量代码审计</span>
             <span class="value" id="dash-inc-summary">—</span>
           </div>
           <div class="dashboard-summary-item">
-            <span class="label">📦 全量代码审计</span>
+            <span class="label" data-i18n="dash.full">📦 全量代码审计</span>
             <span class="value" id="dash-full-summary">—</span>
           </div>
         </div>
       </div>
       <div class="card dashboard-table-card">
-        <div class="card-title"><span>最近扫描记录</span><span class="dashboard-table-tag">Latest Events</span></div>
+        <div class="card-title"><span data-i18n="dash.recentScans">最近扫描记录</span><span class="dashboard-table-tag" data-i18n="dash.latestEvents">Latest Events</span></div>
         <div id="dashScans"></div>
       </div>
     </div>
 
-    <!-- 账户配置 -->
+    <!-- 代码库配置 -->
     <div id="s-accounts" style="display:none">
       <div class="card">
         <div class="card-title">
@@ -2051,7 +2172,7 @@ nav::before{
 
 <script>
 const PAGES = ['dashboard','accounts','repoowners','channels','instant','ai','history','stats','prompts','whitelist','users','settings'];
-const PAGE_TITLES = {dashboard:'概览',accounts:'账户配置',repoowners:'仓库负责人',channels:'通知渠道',
+const PAGE_TITLES = {dashboard:'概览',accounts:'代码库配置',repoowners:'仓库负责人',channels:'通知渠道',
   instant:'即时代码分析',ai:'AI 配置',history:'扫描历史',stats:'漏洞统计',prompts:'提示词管理',
   whitelist:'误报白名单',users:'账户管理',settings:'系统设置'};
 let currentPage = 'dashboard';
@@ -4098,8 +4219,17 @@ let _theme = localStorage.getItem('theme') || 'dark';
 
 function applyTheme() {
   document.body.classList.toggle('dark', _theme === 'dark');
+  document.body.classList.toggle('light', _theme === 'light');
   const btn = document.getElementById('themeBtn');
-  if (btn) btn.textContent = _theme === 'dark' ? '☀️' : '🌙';
+  if (btn) {
+    const isZh = _lang !== 'en';
+    btn.textContent = _theme === 'dark'
+      ? (isZh ? '浅色' : 'Light')
+      : (isZh ? '深色' : 'Dark');
+    btn.title = _theme === 'dark'
+      ? (isZh ? '切换到浅色主题' : 'Switch to Light Theme')
+      : (isZh ? '切换到深色主题' : 'Switch to Dark Theme');
+  }
 }
 
 function toggleTheme() {
@@ -4113,11 +4243,17 @@ let _lang = localStorage.getItem('lang') || 'zh';
 
 const _T = {
   zh: {
-    'nav.dashboard':'概览','nav.accounts':'账户配置','nav.repoowners':'仓库负责人',
+    'nav.dashboard':'概览','nav.accounts':'代码库配置','nav.repoowners':'仓库负责人',
     'nav.channels':'通知渠道','nav.instant':'即时分析','nav.ai':'AI 配置',
     'nav.history':'扫描历史','nav.stats':'漏洞统计','nav.prompts':'提示词',
     'nav.whitelist':'误报白名单','nav.users':'账户管理','nav.settings':'系统设置',
     'nav.poison':'投毒检测','nav.inc':'增量审计','nav.full':'全量审计',
+    'sidebar.control':'控制节点','sidebar.system':'系统','sidebar.mode':'模式',
+    'dash.kicker':'安全运营总览','dash.headline':'代码风险态势总览',
+    'dash.subline':'聚合最近审计结果、计划任务节奏与运行状态，用于快速识别当前风险密度、执行节拍和扫描链路是否处于健康状态。',
+    'dash.nodeStatus':'节点状态','dash.scope':'检测范围','dash.stack':'分析栈','dash.lastRefresh':'最近刷新',
+    'dash.poison':'🛡️ 投毒检测','dash.incremental':'🔍 增量代码审计','dash.full':'📦 全量代码审计',
+    'dash.recentScans':'最近扫描记录','dash.latestEvents':'最新事件',
     'btn.cancel':'取消','btn.startScan':'开始扫描',
     'modal.selectAI':'选择 AI 模型','modal.globalAI':'全局 AI 配置',
     'topbar.pause':'暂停','topbar.stop':'停止','topbar.logout':'退出',
@@ -4125,11 +4261,17 @@ const _T = {
     'status.error':'失败','status.stopped':'已停止','status.interrupted':'已中断',
   },
   en: {
-    'nav.dashboard':'Dashboard','nav.accounts':'Accounts','nav.repoowners':'Repo Owners',
+    'nav.dashboard':'Dashboard','nav.accounts':'Code Repos','nav.repoowners':'Repo Owners',
     'nav.channels':'Channels','nav.instant':'Instant Analysis','nav.ai':'AI Config',
     'nav.history':'Scan History','nav.stats':'Statistics','nav.prompts':'Prompts',
     'nav.whitelist':'False Positive List','nav.users':'User Management','nav.settings':'Settings',
     'nav.poison':'Poison Detect','nav.inc':'Incremental Audit','nav.full':'Full Audit',
+    'sidebar.control':'Control Node','sidebar.system':'System','sidebar.mode':'Mode',
+    'dash.kicker':'Security Operations Grid','dash.headline':'Code Risk Overview',
+    'dash.subline':'Aggregate recent audit results, schedule cadence and runtime state to quickly understand current risk density and scan-chain health.',
+    'dash.nodeStatus':'Node Status','dash.scope':'Detection Scope','dash.stack':'Analysis Stack','dash.lastRefresh':'Last Refresh',
+    'dash.poison':'🛡️ Poison Detection','dash.incremental':'🔍 Incremental Audit','dash.full':'📦 Full Audit',
+    'dash.recentScans':'Recent Scans','dash.latestEvents':'Latest Events',
     'btn.cancel':'Cancel','btn.startScan':'Start Scan',
     'modal.selectAI':'Select AI Model','modal.globalAI':'Global AI Config',
     'topbar.pause':'Pause','topbar.stop':'Stop','topbar.logout':'Logout',
@@ -4173,6 +4315,7 @@ function applyLang() {
   if (titleEl && PAGE_TITLES_I18N[currentPage]) titleEl.textContent = PAGE_TITLES_I18N[currentPage];
   // 重新填充 AI 模型下拉（语言相关的"全局配置"选项）
   populateProfileSelects();
+  applyTheme();
 }
 
 function toggleLang() {
