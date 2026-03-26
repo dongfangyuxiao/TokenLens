@@ -8,6 +8,8 @@
 - 新增实例 ID 机制，可生成绑定到指定部署实例的授权码
 - 系统设置新增“产品授权”卡片，可查看授权状态、录入授权码、切换授权校验开关
 - 新增 `/api/license-status` 与 `/api/license-config` 接口
+- 新增授权临期提醒、顶部授权状态胶囊和右下角授权信息水印
+- 授权可按功能点限制 `poison_scan`、`incremental_audit`、`full_audit`、`instant_analysis`
 - 默认不启用授权拦截，避免影响现网使用；启用后会校验扫描与即时分析相关接口
 - README、技术文档、用户手册同步补充授权生成与校验说明
 

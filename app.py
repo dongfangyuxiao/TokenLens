@@ -61,6 +61,13 @@ _pause_event = threading.Event()   # set → 运行中；clear → 暂停中
 _pause_event.set()
 
 _WEEKDAY_CN = ['周一','周二','周三','周四','周五','周六','周日']
+_LICENSE_WARN_DAYS = 30
+_FEATURE_LABELS = {
+    'poison_scan': '投毒检测',
+    'incremental_audit': '增量代码审计',
+    'full_audit': '全量代码审计',
+    'instant_analysis': '即时分析',
+}
 
 
 def _get_license_status():
@@ -74,6 +81,19 @@ def _get_license_status():
         expected_machine_id=instance_id,
     )
     payload = result.get('payload') or {}
+    expires_at = payload.get('expires_at', '')
+    expires_in_days = None
+    warning = ''
+    if expires_at:
+        try:
+            expires_dt = license_manager._parse_iso8601(expires_at)
+            if expires_dt:
+                delta = expires_dt - datetime.now(expires_dt.tzinfo)
+                expires_in_days = max(delta.days, 0)
+                if result.get('valid') and expires_in_days <= _LICENSE_WARN_DAYS:
+                    warning = f'授权将在 {expires_in_days} 天后到期'
+        except Exception:
+            expires_in_days = None
     return {
         'configured': bool(license_key),
         'enforce_enabled': enforce_enabled,
@@ -84,17 +104,28 @@ def _get_license_status():
         'product': payload.get('product', license_manager.DEFAULT_PRODUCT),
         'customer': payload.get('customer', ''),
         'issued_at': payload.get('issued_at', ''),
-        'expires_at': payload.get('expires_at', ''),
+        'expires_at': expires_at,
+        'expires_in_days': expires_in_days,
+        'warning': warning,
         'features': payload.get('features', []),
         'machine_id': payload.get('machine_id', ''),
         'metadata': payload.get('metadata', {}),
     }
 
 
-def _require_license_if_enabled():
+def _license_allows_feature(status: dict, feature: str) -> bool:
+    features = status.get('features') or []
+    if not features:
+        return True
+    return feature in features
+
+
+def _require_license_if_enabled(feature: str = ''):
     status = _get_license_status()
     if status['enforce_enabled'] and not status['valid']:
         raise HTTPException(403, f'产品授权校验失败：{status["message"]}')
+    if status['enforce_enabled'] and feature and not _license_allows_feature(status, feature):
+        raise HTTPException(403, f'当前授权未开通：{_FEATURE_LABELS.get(feature, feature)}')
     return status
 
 def _run_in_thread(scan_type: str, llm_profile_id=None):
@@ -535,12 +566,13 @@ class ScanTrigger(BaseModel):
 
 @app.post('/api/scan/trigger')
 def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(require_auth)):
-    _require_license_if_enabled()
     scan_type = body.scan_type
     if body.full_scan and scan_type == 'incremental_audit':
         scan_type = 'full_audit'
     if scan_type not in _SCAN_TYPE_LABELS:
         raise HTTPException(400, f'无效类型，可选: {", ".join(_SCAN_TYPE_LABELS)}')
+    feature_key = 'poison_scan' if scan_type == 'poison' else scan_type
+    _require_license_if_enabled(feature_key)
     if not _scan_lock.acquire(blocking=False):
         raise HTTPException(400, '扫描正在进行中')
     _stop_event.clear()
@@ -612,7 +644,6 @@ def delete_scan(scan_id: int, _: str = Depends(require_auth)):
 
 @app.post('/api/scans/{scan_id}/rerun')
 def rerun_scan(scan_id: int, operator: str = Depends(require_auth)):
-    _require_license_if_enabled()
     if not _scan_lock.acquire(blocking=False):
         raise HTTPException(400, '扫描正在进行中，请等待结束后重新扫描')
     row = db.get_scans(limit=200)
@@ -626,6 +657,8 @@ def rerun_scan(scan_id: int, operator: str = Depends(require_auth)):
         scan_type = 'full_audit'
     elif scan_type == 'incremental':
         scan_type = 'incremental_audit'
+    feature_key = 'poison_scan' if scan_type == 'poison' else scan_type
+    _require_license_if_enabled(feature_key)
     _stop_event.clear()
     _pause_event.set()
     label          = _SCAN_TYPE_LABELS.get(scan_type, scan_type)
@@ -909,7 +942,7 @@ class InstantAnalysisIn(BaseModel):
 @app.post('/api/analyze/instant')
 def instant_analyze(body: InstantAnalysisIn, _: str = Depends(require_auth)):
     """对任意代码片段直接进行 LLM 安全分析，无需 git commit。"""
-    _require_license_if_enabled()
+    _require_license_if_enabled('instant_analysis')
     from analyzer import build_llm_caller, _find_prompt, _parse, AUDIT_EXTENSIONS, SKIP_EXTENSIONS
     import os as _os
 
@@ -955,7 +988,7 @@ async def instant_analyze_upload(
 ):
     """上传文件/文件夹/压缩包进行 LLM 安全分析。"""
     _ = require_auth(credentials)
-    _require_license_if_enabled()
+    _require_license_if_enabled('instant_analysis')
     from analyzer import build_llm_caller, _find_prompt, _parse, AUDIT_EXTENSIONS, SKIP_EXTENSIONS
 
     _MAX_FILE_SIZE  = 300_000   # 单文件最大 300 KB
@@ -1085,6 +1118,7 @@ def status(_: str = Depends(require_auth)):
         'scanning'         : scanning,
         'paused'           : scanning and not _pause_event.is_set(),
         'schedules'        : schedules_out,
+        'license'          : _get_license_status(),
     }
 
 if __name__ == '__main__':

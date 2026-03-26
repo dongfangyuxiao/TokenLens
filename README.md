@@ -156,6 +156,7 @@ python3 license_manager.py generate \
 ```
 
 可重复追加 `--feature` 写入功能点，例如 `--feature full_audit --feature instant_analysis`。
+若不传 `--feature`，则默认表示授权不限制功能点。
 
 ### 校验授权码
 
@@ -164,6 +165,12 @@ python3 license_manager.py verify \
   --license-key '粘贴授权码' \
   --machine-id '粘贴系统设置页里的实例 ID'
 ```
+
+推荐功能点：
+- `poison_scan`
+- `incremental_audit`
+- `full_audit`
+- `instant_analysis`
 
 ## 使用指南
 

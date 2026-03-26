@@ -32,6 +32,20 @@ nav{flex:1;padding:8px 0;overflow-y:auto}
   box-shadow:0 1px 8px rgba(0,80,30,.06)}
 .page-title{font-size:15px;font-weight:700;color:#14532d;letter-spacing:.03em}
 .topbar-right{display:flex;align-items:center;gap:12px}
+.license-badge{display:inline-flex;align-items:center;gap:8px;min-height:34px;padding:0 12px;border-radius:999px;
+  font-size:12px;font-weight:700;letter-spacing:.02em;color:#0f172a;background:rgba(148,163,184,.12);
+  border:1px solid rgba(148,163,184,.18)}
+.license-badge.ok{color:#bffef2;background:rgba(25,203,173,.12);border-color:rgba(25,203,173,.24)}
+.license-badge.warn{color:#ffe6a5;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.24)}
+.license-badge.err{color:#ffd4dc;background:rgba(255,77,79,.12);border-color:rgba(255,77,79,.24)}
+.license-watermark{position:fixed;right:22px;bottom:18px;z-index:20;pointer-events:none;padding:10px 14px;border-radius:14px;
+  background:rgba(11,16,28,.78);border:1px solid rgba(75,146,255,.18);box-shadow:0 10px 30px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.04);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:#dbeafe;max-width:min(40vw,360px)}
+.license-watermark .wm-title{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#7dd3fc}
+.license-watermark .wm-main{margin-top:4px;font-size:13px;font-weight:700}
+.license-watermark .wm-sub{margin-top:2px;font-size:12px;color:#9fb4cc}
+.license-watermark.warn{border-color:rgba(245,158,11,.22)}
+.license-watermark.err{border-color:rgba(255,77,79,.26)}
 .status-dot{width:8px;height:8px;border-radius:50%;background:#52c41a;display:inline-block}
 .status-dot.idle{background:#52c41a}
 .status-dot.running{background:#16a34a;animation:pulse 1s infinite}
@@ -923,6 +937,16 @@ body.light .topbar{
   border-bottom:1px solid rgba(59,130,246,.12);
   box-shadow:0 10px 24px rgba(148,163,184,.1);
 }
+body.light .license-badge{color:#1d3551;background:rgba(59,130,246,.08);border-color:rgba(59,130,246,.14)}
+body.light .license-badge.ok{color:#0f766e;background:rgba(20,184,166,.1);border-color:rgba(20,184,166,.18)}
+body.light .license-badge.warn{color:#b45309;background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.22)}
+body.light .license-badge.err{color:#be123c;background:rgba(244,63,94,.1);border-color:rgba(244,63,94,.18)}
+body.light .license-watermark{
+  background:rgba(255,255,255,.88);color:#16304c;border-color:rgba(59,130,246,.14);
+  box-shadow:0 10px 24px rgba(59,130,246,.1)
+}
+body.light .license-watermark .wm-title{color:#2563eb}
+body.light .license-watermark .wm-sub{color:#59748f}
 body.light .page-title,
 body.light .card-title,
 body.light .modal-title,
@@ -1102,6 +1126,7 @@ body.light .empty{
   .topbar{height:auto;min-height:64px;padding:14px 18px}
   .topbar,.topbar-right{flex-wrap:wrap}
   .content{padding:18px}
+  .license-watermark{right:14px;left:14px;bottom:14px;max-width:none}
   .stat-grid,#stats-cards{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   .dashboard-pills,.dashboard-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .dashboard-hero-top{flex-direction:column}
@@ -1226,6 +1251,7 @@ body.light .empty{
     <div class="topbar-right">
       <span id="statusText" style="font-size:13px;color:#888"></span>
       <span class="status-dot" id="statusDot"></span>
+      <span id="licenseBadge" class="license-badge">LICENSE</span>
       <button class="btn-icon" id="themeBtn" onclick="toggleTheme()" title="切换主题">🌙</button>
       <button class="btn-icon" id="langBtn" onclick="toggleLang()" title="切换语言" style="font-size:12px;font-weight:700;letter-spacing:.03em">中</button>
       <button class="btn btn-default" onclick="triggerScan('poison')" id="poisonBtn" data-i18n="nav.poison">投毒检测</button>
@@ -2279,6 +2305,12 @@ body.light .empty{
   </div>
 </div>
 
+<div id="licenseWatermark" class="license-watermark" style="display:none">
+  <div class="wm-title">License</div>
+  <div class="wm-main" id="licenseWatermarkMain">未配置授权</div>
+  <div class="wm-sub" id="licenseWatermarkSub">授权信息将在这里显示</div>
+</div>
+
 <div id="toast"></div>
 </div><!-- /#app -->
 
@@ -2418,6 +2450,41 @@ function updateHeroTimestamp() {
   el.textContent = now.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
 }
 
+let _licenseAlertKey = '';
+
+function updateLicenseUI(status) {
+  const badge = document.getElementById('licenseBadge');
+  const wm = document.getElementById('licenseWatermark');
+  const wmMain = document.getElementById('licenseWatermarkMain');
+  const wmSub = document.getElementById('licenseWatermarkSub');
+  if (!badge || !wm || !wmMain || !wmSub) return;
+  const isEn = _lang === 'en';
+  const customer = status.customer || (isEn ? 'Unassigned' : '未指定客户');
+  const expires = status.expires_at || '-';
+  const warning = status.warning || '';
+  const features = Array.isArray(status.features) ? status.features : [];
+  const modeText = status.enforce_enabled
+    ? (isEn ? 'Enforced' : '已启用校验')
+    : (isEn ? 'Observe Only' : '仅展示未拦截');
+  const baseText = status.valid
+    ? (isEn ? 'Licensed' : '授权有效')
+    : (status.configured ? (isEn ? 'License Issue' : '授权异常') : (isEn ? 'No License' : '未配置授权'));
+  badge.className = `license-badge ${status.valid ? (warning ? 'warn' : 'ok') : 'err'}`;
+  badge.textContent = `${baseText} · ${modeText}`;
+  wm.className = `license-watermark ${status.valid ? (warning ? 'warn' : '') : 'err'}`.trim();
+  wm.style.display = '';
+  wmMain.textContent = `${customer} · ${baseText}`;
+  wmSub.textContent = warning
+    ? `${warning} · ${modeText}`
+    : `${isEn ? 'Expires' : '到期时间'}: ${expires}${features.length ? ` · Feature: ${features.join(', ')}` : ''}`;
+
+  const warnKey = `${status.state}|${warning}|${status.enforce_enabled}`;
+  if (warning && warnKey !== _licenseAlertKey) {
+    _licenseAlertKey = warnKey;
+    toast(warning, false);
+  }
+}
+
 // ── 状态轮询 ──────────────────────────────────────────────────────
 async function pollStatus() {
   try {
@@ -2429,7 +2496,13 @@ async function pollStatus() {
     const scanBtn    = document.getElementById('scanBtn');
     const fsBtn      = document.getElementById('fullScanBtn');
     const poisonBtn  = document.getElementById('poisonBtn');
+    const iaBtn = document.getElementById('iaBtn');
+    const iaUploadBtn = document.getElementById('iaUploadBtn');
     const heroScanState = document.getElementById('heroScanState');
+    if (s.license) updateLicenseUI(s.license);
+    const licenseFeatures = Array.isArray(s.license?.features) ? s.license.features : [];
+    const restrictByFeatures = !!(s.license && s.license.enforce_enabled && licenseFeatures.length);
+    const allows = (feature) => !restrictByFeatures || licenseFeatures.includes(feature);
     if (s.scanning) {
       dot.className = s.paused ? 'status-dot paused' : 'status-dot running';
       text.textContent = s.paused ? '已暂停' : '扫描中…';
@@ -2446,9 +2519,20 @@ async function pollStatus() {
       if (heroScanState) heroScanState.textContent = 'IDLE';
       pauseBtn.style.display = 'none';
       stopBtn.style.display  = 'none';
-      scanBtn.disabled = false;
-      fsBtn.disabled   = false;
-      if (poisonBtn) poisonBtn.disabled = false;
+      scanBtn.disabled = !allows('incremental_audit');
+      fsBtn.disabled   = !allows('full_audit');
+      if (poisonBtn) poisonBtn.disabled = !allows('poison_scan');
+    }
+    if (poisonBtn) poisonBtn.title = poisonBtn.disabled ? '当前授权未开通此能力' : '';
+    scanBtn.title = scanBtn.disabled ? '当前授权未开通此能力' : '';
+    fsBtn.title = fsBtn.disabled ? '当前授权未开通此能力' : '';
+    if (iaBtn) {
+      iaBtn.disabled = !allows('instant_analysis');
+      iaBtn.title = iaBtn.disabled ? '当前授权未开通此能力' : '';
+    }
+    if (iaUploadBtn) {
+      iaUploadBtn.disabled = !allows('instant_analysis');
+      iaUploadBtn.title = iaUploadBtn.disabled ? '当前授权未开通此能力' : '';
     }
     // 更新 Dashboard 调度信息栏（三类）
     function _schedSummary(type) {
@@ -4336,7 +4420,10 @@ async function loadLicenseStatus() {
   const hint = document.getElementById('licenseHint');
   const state = status.valid ? '校验通过' : (status.message || '未配置授权码');
   const enabledText = status.enforce_enabled ? '当前已启用拦截' : '当前未启用拦截';
-  hint.textContent = `${state}，${enabledText}。默认关闭，不会拦截扫描或即时分析。`;
+  const featureText = Array.isArray(status.features) && status.features.length ? `授权功能：${status.features.join(', ')}。` : '授权功能：未限制。';
+  const warningText = status.warning ? `${status.warning}。` : '';
+  hint.textContent = `${state}，${enabledText}。${warningText}${featureText}默认关闭，不会拦截扫描或即时分析。`;
+  updateLicenseUI(status);
 }
 
 async function saveLicenseConfig() {
