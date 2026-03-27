@@ -1338,6 +1338,14 @@ body.light .empty{
         </div>
         <div id="accountList"></div>
       </div>
+      <div class="card">
+        <div class="card-title">
+          仓库列表
+          <button class="btn btn-default btn-sm" onclick="loadAccountRepoList()">刷新</button>
+        </div>
+        <div style="font-size:13px;color:#888;margin-bottom:12px">数据来源于全量审计启动后的 main/master 仓库同步结果。</div>
+        <div id="accountRepoList"></div>
+      </div>
     </div>
 
     <!-- 仓库负责人 -->
@@ -3049,9 +3057,16 @@ function esc(s) {
 
 // ── 账户 ──────────────────────────────────────────────────────────
 async function loadAccounts() {
-  const list = await api('GET', '/api/accounts').catch(() => []);
+  const [list, repos] = await Promise.all([
+    api('GET', '/api/accounts').catch(() => []),
+    api('GET', '/api/repo-sync-status').catch(() => [])
+  ]);
   const el = document.getElementById('accountList');
-  if (!list.length) { el.innerHTML = '<div class="empty">暂无账户，点击右上角添加</div>'; return; }
+  if (!list.length) {
+    el.innerHTML = '<div class="empty">暂无账户，点击右上角添加</div>';
+    renderAccountRepoList(repos);
+    return;
+  }
   el.innerHTML = `<table>
     <thead><tr><th>平台</th><th>名称</th><th>Token</th><th>Owner</th><th>操作</th></tr></thead>
     <tbody>${list.map(a => `
@@ -3063,6 +3078,33 @@ async function loadAccounts() {
         <td><button class="btn btn-danger btn-sm" onclick="delAccount(${a.id})">删除</button></td>
       </tr>`).join('')}
     </tbody></table>`;
+  renderAccountRepoList(repos);
+}
+
+function renderAccountRepoList(rows) {
+  const el = document.getElementById('accountRepoList');
+  if (!el) return;
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div class="empty">暂无仓库，请先启动一次全量审计任务</div>';
+    return;
+  }
+  el.innerHTML = `<table>
+    <thead><tr><th>来源</th><th>仓库</th><th>分支</th><th>Commit</th><th>文件数</th><th>同步时间</th></tr></thead>
+    <tbody>${rows.map(r => `
+      <tr>
+        <td>${esc(r.source || '-')}</td>
+        <td style="font-family:monospace">${esc(r.repo || '-')}</td>
+        <td>${esc(r.branch || '-')}</td>
+        <td style="font-family:monospace;color:#888">${esc((r.commit_sha || '').slice(0, 12) || '-')}</td>
+        <td>${r.file_count ?? '-'}</td>
+        <td>${fmtTime(r.synced_at)}</td>
+      </tr>`).join('')}
+    </tbody></table>`;
+}
+
+async function loadAccountRepoList() {
+  const rows = await api('GET', '/api/repo-sync-status').catch(() => []);
+  renderAccountRepoList(rows);
 }
 
 const PLATFORM_META = {
