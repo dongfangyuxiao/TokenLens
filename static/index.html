@@ -1387,6 +1387,10 @@ body.light .empty{
             style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
             📁 上传文件
           </button>
+          <button id="ia_tab_repo" onclick="iaTab('repo')"
+            style="padding:8px 20px;border:none;background:none;font-size:13px;font-weight:600;cursor:pointer;color:#888;border-bottom:2px solid transparent;margin-bottom:-2px">
+            🔗 仓库 URL
+          </button>
         </div>
 
         <!-- 粘贴模式 -->
@@ -1470,6 +1474,31 @@ body.light .empty{
             <button class="btn btn-primary" onclick="runInstantUpload()" id="iaUploadBtn">🔍 开始分析</button>
             <button class="btn btn-default btn-sm" onclick="iaClearFiles()" id="iaClearBtn" style="display:none">清空</button>
             <span id="iaUploadStatus" style="font-size:13px;color:#888"></span>
+          </div>
+        </div>
+
+        <!-- 仓库 URL 模式 -->
+        <div id="ia_panel_repo" style="display:none">
+          <div style="font-size:13px;color:#888;margin-bottom:16px">
+            输入仓库地址自动下载并进行安全审计。内网仓库会优先匹配“代码库配置”中的 Token。
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>AI 模型</label>
+              <select id="iaRepoLlm" style="width:100%">
+                <option value="">全局配置</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>仓库 URL</label>
+              <input id="ia_repo_url" placeholder="如：https://github.com/owner/repo.git 或 http://gitlab.local/group/repo.git">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary" onclick="runInstantRepoUrl()" id="iaRepoBtn">🔍 开始分析</button>
+            <span id="iaRepoStatus" style="font-size:13px;color:#888"></span>
           </div>
         </div>
       </div>
@@ -2606,6 +2635,7 @@ async function pollStatus() {
     const poisonBtn  = document.getElementById('poisonBtn');
     const iaBtn = document.getElementById('iaBtn');
     const iaUploadBtn = document.getElementById('iaUploadBtn');
+    const iaRepoBtn = document.getElementById('iaRepoBtn');
     const heroScanState = document.getElementById('heroScanState');
     if (s.license) updateLicenseUI(s.license);
     const licenseFeatures = Array.isArray(s.license?.features) ? s.license.features : [];
@@ -2643,6 +2673,10 @@ async function pollStatus() {
     if (iaUploadBtn) {
       iaUploadBtn.disabled = !allows('instant_analysis');
       iaUploadBtn.title = iaUploadBtn.disabled ? '当前授权未开通此能力' : '';
+    }
+    if (iaRepoBtn) {
+      iaRepoBtn.disabled = !allows('instant_analysis');
+      iaRepoBtn.title = iaRepoBtn.disabled ? '当前授权未开通此能力' : '';
     }
     // 更新 Dashboard 调度信息栏（三类）
     function _schedSummary(type) {
@@ -3642,7 +3676,7 @@ function populateProfileSelects() {
     const model = p.model || 'default';
     return `<option value="${p.id}">${esc(p.name)} [${esc(provider)}/${esc(model)}]</option>`;
   }).join('');
-  ['scanModalLlm','newSched-poison-llm','newSched-incremental_audit-llm','newSched-full_audit-llm','iaLlm','iaUploadLlm'].forEach(id => {
+  ['scanModalLlm','newSched-poison-llm','newSched-incremental_audit-llm','newSched-full_audit-llm','iaLlm','iaUploadLlm','iaRepoLlm'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const cur = el.value;
@@ -3841,7 +3875,7 @@ async function delWhitelist(id) {
 const SEVERITY_COLOR_MAP = {critical:'#ff4d4f',high:'#fa8c16',medium:'#d4b106',low:'#52c41a'};
 const SEVERITY_ZH_MAP    = {critical:'严重',high:'高危',medium:'中危',low:'低危'};
 
-let _iaMode = 'paste';  // 'paste' | 'upload'
+let _iaMode = 'paste';  // 'paste' | 'upload' | 'repo'
 let _iaFiles = [];      // 已选择的 File 对象
 let _instantExportData = null;
 
@@ -3855,12 +3889,16 @@ function iaTab(mode) {
   _iaMode = mode;
   document.getElementById('ia_panel_paste').style.display  = mode === 'paste'  ? '' : 'none';
   document.getElementById('ia_panel_upload').style.display = mode === 'upload' ? '' : 'none';
+  document.getElementById('ia_panel_repo').style.display   = mode === 'repo'   ? '' : 'none';
   const tabPaste  = document.getElementById('ia_tab_paste');
   const tabUpload = document.getElementById('ia_tab_upload');
+  const tabRepo   = document.getElementById('ia_tab_repo');
   tabPaste.style.color        = mode === 'paste'  ? '#16a34a' : '#888';
   tabPaste.style.borderBottomColor  = mode === 'paste'  ? '#16a34a' : 'transparent';
   tabUpload.style.color       = mode === 'upload' ? '#16a34a' : '#888';
   tabUpload.style.borderBottomColor = mode === 'upload' ? '#16a34a' : 'transparent';
+  tabRepo.style.color         = mode === 'repo'   ? '#16a34a' : '#888';
+  tabRepo.style.borderBottomColor   = mode === 'repo'   ? '#16a34a' : 'transparent';
   document.getElementById('ia_result').style.display = 'none';
 }
 
@@ -3997,7 +4035,7 @@ async function runInstantUpload() {
     }
     const r = await resp.json();
     status.textContent = `分析完成，共 ${r.files.length} 个文件，发现 ${r.total_findings} 个问题`;
-    renderInstantUploadResults(r.files);
+    renderInstantUploadResults(r.files, 'upload');
   } catch(e) {
     status.textContent = '';
     toast(e.message, true);
@@ -4006,7 +4044,39 @@ async function runInstantUpload() {
   }
 }
 
-function renderInstantUploadResults(files) {
+async function runInstantRepoUrl() {
+  const repoUrl = document.getElementById('ia_repo_url')?.value.trim();
+  const llmVal  = document.getElementById('iaRepoLlm')?.value || '';
+  const btn     = document.getElementById('iaRepoBtn');
+  const status  = document.getElementById('iaRepoStatus');
+  if (!repoUrl) { toast('请输入仓库 URL', true); return; }
+
+  btn.disabled = true; btn.textContent = '分析中…';
+  status.textContent = '正在拉取仓库并分析，请稍候…';
+  document.getElementById('ia_result').style.display = 'none';
+  _setInstantExportData('repo', []);
+
+  try {
+    const r = await api('POST', '/api/analyze/instant-repo-url', {
+      repo_url: repoUrl,
+      llm_profile_id: llmVal ? parseInt(llmVal, 10) : null
+    });
+    status.textContent = `分析完成，共 ${r.files.length} 个文件，发现 ${r.total_findings} 个问题`;
+    renderInstantUploadResults(r.files, 'repo');
+  } catch (e) {
+    status.textContent = '';
+    const msg = (e && e.message) ? e.message : '';
+    if (msg && /Failed to fetch|NetworkError/i.test(msg)) {
+      toast('网络不通，请检查服务连通性后重试', true);
+    } else {
+      toast(msg || '分析失败', true);
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 开始分析';
+  }
+}
+
+function renderInstantUploadResults(files, mode = 'upload') {
   const resEl = document.getElementById('ia_result');
   const title = document.getElementById('ia_result_title');
   const el    = document.getElementById('ia_findings');
@@ -4014,7 +4084,7 @@ function renderInstantUploadResults(files) {
 
   const totalFindings = files.reduce((s, f) => s + f.findings.length, 0);
   title.textContent = `分析结果 — ${files.length} 个文件，共发现 ${totalFindings} 个问题`;
-  _setInstantExportData('upload', files);
+  _setInstantExportData(mode, files);
 
   const parts = [];
   for (const file of files) {

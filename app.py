@@ -1,4 +1,4 @@
-import os, json, threading, secrets, re, zipfile, io, html as _html
+import os, json, threading, secrets, re, zipfile, io, html as _html, subprocess, tempfile, shutil
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse, Response
@@ -8,6 +8,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import List, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
+from urllib.parse import urlparse, urlunparse, quote
 import database as db
 import license_manager
 from scanner import run_scan
@@ -1047,6 +1048,11 @@ class InstantAnalysisIn(BaseModel):
     llm_profile_id: Optional[int] = None
 
 
+class InstantRepoUrlIn(BaseModel):
+    repo_url: str
+    llm_profile_id: Optional[int] = None
+
+
 class InstantExportFileIn(BaseModel):
     filename: str
     summary: str = ''
@@ -1070,6 +1076,172 @@ def _resolve_llm_config(llm_profile_id: Optional[int]):
                 'base_url': profile['base_url'],
             }
     return db.get_llm_config()
+
+
+_INSTANT_MAX_FILE_SIZE = 300_000    # 单文件最大 300 KB
+_INSTANT_MAX_TOTAL_SIZE = 1_000_000 # 总计最大 1 MB
+_INSTANT_MAX_FILES = 50             # 最多分析 50 个文件
+_INSTANT_SKIP_DIRS = {'.git', '.svn', '.hg', '.idea', '.vscode', 'node_modules', 'dist', 'build', 'target'}
+
+
+def _instant_prepare_runtime(llm_profile_id: Optional[int]):
+    from analyzer import build_llm_caller, _find_prompt, _parse, AUDIT_EXTENSIONS, SKIP_EXTENSIONS
+    llm_cfg = _resolve_llm_config(llm_profile_id)
+    call_fn = build_llm_caller(llm_cfg)
+    if not call_fn:
+        raise HTTPException(400, '未配置 LLM，请先在 AI 配置中填写 API Key')
+    return {
+        'call_fn': call_fn,
+        'prompts': db.get_prompts_for_analysis(),
+        'find_prompt': _find_prompt,
+        'parse': _parse,
+        'audit_extensions': AUDIT_EXTENSIONS,
+        'skip_extensions': SKIP_EXTENSIONS,
+    }
+
+
+def _instant_should_analyze(fname: str, audit_extensions: set, skip_extensions: set) -> bool:
+    _, ext = os.path.splitext(fname)
+    ext = ext.lower()
+    base = os.path.basename(fname)
+    if ext in skip_extensions:
+        return False
+    return ext in audit_extensions or base in audit_extensions
+
+
+def _instant_pick_prompt(fname: str, prompts: list, find_prompt):
+    prompt_tpl = find_prompt(fname, prompts)
+    if not prompt_tpl:
+        backend_prompts = [p for p in prompts if p.get('category') == 'backend']
+        prompt_tpl = (backend_prompts[0]['content'] if backend_prompts
+                      else prompts[0]['content'] if prompts else None)
+    return prompt_tpl
+
+
+def _instant_analyze_collected(collected: list[tuple[str, bytes]], runtime: dict) -> list:
+    call_fn = runtime['call_fn']
+    prompts = runtime['prompts']
+    find_prompt = runtime['find_prompt']
+    parse = runtime['parse']
+
+    def _analyze_one(fname: str, data: bytes):
+        try:
+            code = data.decode('utf-8', errors='replace')
+        except Exception:
+            return {'filename': fname, 'findings': [], 'summary': '文件解码失败', 'error': True}
+        if not code.strip():
+            return {'filename': fname, 'findings': [], 'summary': '文件为空'}
+
+        prompt_tpl = _instant_pick_prompt(fname, prompts, find_prompt)
+        if not prompt_tpl:
+            return {'filename': fname, 'findings': [], 'summary': '未找到可用提示词', 'error': True}
+
+        diff = '\n'.join(f'+{line}' for line in code.splitlines())
+        prompt = prompt_tpl.format(filename=fname, message='即时分析', diff=diff)
+        try:
+            raw_resp = call_fn(prompt)
+            result = parse(raw_resp)
+            return {
+                'filename': fname,
+                'findings': result.get('findings', []),
+                'summary': result.get('summary', ''),
+            }
+        except Exception as e:
+            return {'filename': fname, 'findings': [], 'summary': f'LLM 分析失败: {e}', 'error': True}
+
+    import concurrent.futures
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        futs = {pool.submit(_analyze_one, fn, data): fn for fn, data in collected}
+        for fut in concurrent.futures.as_completed(futs):
+            results.append(fut.result())
+    results.sort(key=lambda r: r['filename'])
+    return results
+
+
+def _extract_repo_host(repo_url: str) -> str:
+    repo_url = (repo_url or '').strip()
+    if not repo_url:
+        return ''
+    parsed = urlparse(repo_url)
+    if parsed.scheme and parsed.netloc:
+        return parsed.netloc.split('@')[-1].split(':')[0].lower()
+    m = re.match(r'^[^@]+@([^:]+):', repo_url)
+    if m:
+        return m.group(1).lower()
+    return ''
+
+
+def _normalize_host(value: str) -> str:
+    return (value or '').strip().lower().split('@')[-1].split(':')[0]
+
+
+def _match_account_for_repo(repo_url: str) -> Optional[dict]:
+    host = _extract_repo_host(repo_url)
+    rows = db.get_accounts()
+    if not rows:
+        return None
+    for acc in rows:
+        acc_host = _extract_repo_host(acc.get('url', ''))
+        if host and acc_host and host == _normalize_host(acc_host):
+            return acc
+    if host == 'github.com':
+        return next((a for a in rows if (a.get('platform') or '').lower() == 'github'), None)
+    if host == 'gitlab.com':
+        return next((a for a in rows if (a.get('platform') or '').lower() == 'gitlab'), None)
+    return None
+
+
+def _inject_token_to_repo_url(repo_url: str, token: str, platform: str) -> str:
+    parsed = urlparse(repo_url)
+    if not token or parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        return repo_url
+    host = parsed.netloc.split('@')[-1]
+    safe_token = quote(token, safe='')
+    plat = (platform or '').lower()
+    if plat in ('gitlab', 'tgit', 'codeup'):
+        auth = f'oauth2:{safe_token}'
+    else:
+        auth = safe_token
+    return urlunparse((parsed.scheme, f'{auth}@{host}', parsed.path, parsed.params, parsed.query, parsed.fragment))
+
+
+def _sanitize_clone_error(msg: str, token: str) -> str:
+    txt = (msg or '').strip()
+    if token:
+        txt = txt.replace(token, '***')
+        txt = txt.replace(quote(token, safe=''), '***')
+    return txt
+
+
+def _clone_repo_temp(repo_url: str, account: Optional[dict]) -> tuple[str, str]:
+    token = (account or {}).get('token', '')
+    platform = (account or {}).get('platform', '')
+    clone_url = _inject_token_to_repo_url(repo_url, token, platform)
+    tmp_dir = tempfile.mkdtemp(prefix='instant_repo_')
+    repo_dir = os.path.join(tmp_dir, 'repo')
+    proc = subprocess.run(
+        ['git', 'clone', '--depth', '1', clone_url, repo_dir],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=180,
+    )
+    if proc.returncode == 0:
+        return tmp_dir, repo_dir
+
+    stderr = _sanitize_clone_error(proc.stderr, token).lower()
+    if any(k in stderr for k in ('could not resolve host', 'failed to connect', 'connection timed out', 'operation timed out', 'network is unreachable', 'name or service not known', 'connection refused')):
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(502, '仓库拉取失败：网络不通或仓库不可达，请检查网络连通性和仓库地址')
+    if any(k in stderr for k in ('authentication failed', 'could not read username', 'access denied', '403', 'permission denied', 'repository not found')):
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        raise HTTPException(401, '仓库拉取失败：认证失败或无权限，请检查代码库配置中的 Token')
+
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    msg = _sanitize_clone_error(proc.stderr or proc.stdout, token).strip()
+    brief = msg.splitlines()[-1] if msg else '未知错误'
+    raise HTTPException(400, f'仓库拉取失败：{brief}')
 
 
 def _build_instant_markdown(files: list) -> str:
@@ -1288,26 +1460,7 @@ async def instant_analyze_upload(
     """上传文件/文件夹/压缩包进行 LLM 安全分析。"""
     _ = require_auth(credentials)
     _require_license_if_enabled('instant_analysis')
-    from analyzer import build_llm_caller, _find_prompt, _parse, AUDIT_EXTENSIONS, SKIP_EXTENSIONS
-
-    _MAX_FILE_SIZE  = 300_000   # 单文件最大 300 KB
-    _MAX_TOTAL_SIZE = 1_000_000 # 总计最大 1 MB
-    _MAX_FILES      = 50        # 最多分析 50 个文件
-
-    llm_cfg = _resolve_llm_config(llm_profile_id)
-    call_fn = build_llm_caller(llm_cfg)
-    if not call_fn:
-        raise HTTPException(400, '未配置 LLM，请先在 AI 配置中填写 API Key')
-
-    prompts = db.get_prompts_for_analysis()
-
-    def _should_analyze(fname: str) -> bool:
-        _, ext = os.path.splitext(fname)
-        ext = ext.lower()
-        base = os.path.basename(fname)
-        if ext in SKIP_EXTENSIONS:
-            return False
-        return ext in AUDIT_EXTENSIONS or base in AUDIT_EXTENSIONS
+    runtime = _instant_prepare_runtime(llm_profile_id)
 
     # 收集 (filename, content_bytes) 列表
     collected: list[tuple[str, bytes]] = []
@@ -1326,68 +1479,85 @@ async def instant_analyze_upload(
                         if entry.is_dir():
                             continue
                         entry_name = entry.filename.lstrip('/')
-                        if not _should_analyze(entry_name):
+                        if not _instant_should_analyze(entry_name, runtime['audit_extensions'], runtime['skip_extensions']):
                             continue
                         data = zf.read(entry)
-                        if len(data) > _MAX_FILE_SIZE:
+                        if len(data) > _INSTANT_MAX_FILE_SIZE:
                             continue
                         collected.append((entry_name, data))
                         total_bytes += len(data)
-                        if total_bytes > _MAX_TOTAL_SIZE or len(collected) >= _MAX_FILES:
+                        if total_bytes > _INSTANT_MAX_TOTAL_SIZE or len(collected) >= _INSTANT_MAX_FILES:
                             break
             except zipfile.BadZipFile:
                 raise HTTPException(400, f'{fname} 不是有效的 ZIP 文件')
         else:
-            if not _should_analyze(fname):
+            if not _instant_should_analyze(fname, runtime['audit_extensions'], runtime['skip_extensions']):
                 continue
-            if len(raw) > _MAX_FILE_SIZE:
+            if len(raw) > _INSTANT_MAX_FILE_SIZE:
                 continue
             collected.append((fname, raw))
             total_bytes += len(raw)
 
-        if total_bytes > _MAX_TOTAL_SIZE or len(collected) >= _MAX_FILES:
+        if total_bytes > _INSTANT_MAX_TOTAL_SIZE or len(collected) >= _INSTANT_MAX_FILES:
             break
 
     if not collected:
         raise HTTPException(400, '未找到可分析的代码文件（不支持的类型或文件过大）')
 
-    def _analyze_one(fname: str, data: bytes):
-        try:
-            code = data.decode('utf-8', errors='replace')
-        except Exception:
-            return {'filename': fname, 'findings': [], 'summary': '文件解码失败', 'error': True}
-        if not code.strip():
-            return {'filename': fname, 'findings': [], 'summary': '文件为空'}
+    results = _instant_analyze_collected(collected, runtime)
+    total_findings = sum(len(r['findings']) for r in results)
+    return {'files': results, 'total_findings': total_findings}
 
-        prompt_tpl = _find_prompt(fname, prompts)
-        if not prompt_tpl:
-            backend_prompts = [p for p in prompts if p.get('category') == 'backend']
-            prompt_tpl = (backend_prompts[0]['content'] if backend_prompts
-                          else prompts[0]['content'] if prompts else None)
-        if not prompt_tpl:
-            return {'filename': fname, 'findings': [], 'summary': '未找到可用提示词', 'error': True}
 
-        diff = '\n'.join(f'+{line}' for line in code.splitlines())
-        prompt = prompt_tpl.format(filename=fname, message='即时分析', diff=diff)
-        try:
-            raw_resp = call_fn(prompt)
-            result   = _parse(raw_resp)
-            return {
-                'filename': fname,
-                'findings': result.get('findings', []),
-                'summary' : result.get('summary', ''),
-            }
-        except Exception as e:
-            return {'filename': fname, 'findings': [], 'summary': f'LLM 分析失败: {e}', 'error': True}
+@app.post('/api/analyze/instant-repo-url')
+def instant_analyze_repo_url(body: InstantRepoUrlIn, _: str = Depends(require_auth)):
+    """输入仓库 URL，拉取后进行即时安全分析。"""
+    _require_license_if_enabled('instant_analysis')
+    repo_url = (body.repo_url or '').strip()
+    if not repo_url:
+        raise HTTPException(400, '仓库 URL 不能为空')
+    if not (repo_url.startswith('http://') or repo_url.startswith('https://') or re.match(r'^[^@]+@[^:]+:.+', repo_url)):
+        raise HTTPException(400, '仓库 URL 格式不正确，仅支持 HTTP(S) 或 SSH 地址')
 
-    import concurrent.futures
-    results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        futs = {pool.submit(_analyze_one, fn, data): fn for fn, data in collected}
-        for fut in concurrent.futures.as_completed(futs):
-            results.append(fut.result())
+    runtime = _instant_prepare_runtime(body.llm_profile_id)
+    account = _match_account_for_repo(repo_url)
 
-    results.sort(key=lambda r: r['filename'])
+    tmp_dir = ''
+    try:
+        tmp_dir, repo_dir = _clone_repo_temp(repo_url, account)
+        collected: list[tuple[str, bytes]] = []
+        total_bytes = 0
+        for root, dirs, files in os.walk(repo_dir):
+            dirs[:] = [d for d in dirs if d not in _INSTANT_SKIP_DIRS]
+            for name in files:
+                full = os.path.join(root, name)
+                if os.path.islink(full):
+                    continue
+                rel = os.path.relpath(full, repo_dir).replace('\\', '/')
+                if not _instant_should_analyze(rel, runtime['audit_extensions'], runtime['skip_extensions']):
+                    continue
+                try:
+                    size = os.path.getsize(full)
+                    if size > _INSTANT_MAX_FILE_SIZE:
+                        continue
+                    with open(full, 'rb') as fh:
+                        data = fh.read()
+                except Exception:
+                    continue
+                collected.append((rel, data))
+                total_bytes += len(data)
+                if total_bytes > _INSTANT_MAX_TOTAL_SIZE or len(collected) >= _INSTANT_MAX_FILES:
+                    break
+            if total_bytes > _INSTANT_MAX_TOTAL_SIZE or len(collected) >= _INSTANT_MAX_FILES:
+                break
+    finally:
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    if not collected:
+        raise HTTPException(400, '未找到可分析的代码文件（不支持的类型、文件过大或仓库为空）')
+
+    results = _instant_analyze_collected(collected, runtime)
     total_findings = sum(len(r['findings']) for r in results)
     return {'files': results, 'total_findings': total_findings}
 
