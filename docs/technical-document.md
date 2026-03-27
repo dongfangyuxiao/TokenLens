@@ -229,6 +229,8 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 
 支持 UDP / TCP 协议，将登录事件、扫描启动、漏洞发现等关键日志实时转发至外部 Syslog 服务器，便于接入 SIEM 系统。
 
+`facility` 支持单值与多值（逗号分隔），多值模式会为每个 facility 创建独立 handler 并并行发送。
+
 ---
 
 ## 5. 数据库设计
@@ -375,9 +377,9 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 #### `app_config` / `llm_config` / `syslog_config`
 | 表 | 说明 |
 |----|------|
-| `app_config` | 系统参数，如 `max_diff_chars`、`opensca_token`、`semgrep_token`、`license_key`、`license_enforce_enabled` |
+| `app_config` | 系统参数，如 `max_diff_chars`、`scan_include_config_files`、`opensca_token`、`semgrep_token`、`license_key`、`license_enforce_enabled` |
 | `llm_config` | 系统默认 LLM 配置（`provider/model/api_key/base_url`） |
-| `syslog_config` | Syslog 主机、端口、协议和 app_name |
+| `syslog_config` | Syslog 主机、端口、协议、facility（支持多值）和 app_name |
 
 #### `prompts` — Prompt 模板
 | 字段 | 类型 | 说明 |
@@ -437,7 +439,7 @@ Authorization: Bearer <token>
 | POST | `/api/scan/stop` | 停止当前扫描 |
 | POST | `/api/scan/pause` | 暂停当前扫描 |
 | POST | `/api/scan/resume` | 继续扫描 |
-| GET | `/api/status` | 获取当前扫描状态与计划摘要 |
+| GET | `/api/status` | 获取当前扫描状态与计划摘要（含实时 `progress` 百分比） |
 | GET | `/api/scans` | 获取扫描历史列表 |
 | DELETE | `/api/scans/{id}` | 删除扫描记录 |
 | POST | `/api/scans/{id}/rerun` | 重新执行某次扫描 |

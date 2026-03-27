@@ -199,6 +199,7 @@ def init_db():
         # 默认配置
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('scan_interval_hours','1')")
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('max_diff_chars','12000')")
+        conn.execute("INSERT OR IGNORE INTO app_config VALUES ('scan_include_config_files','0')")
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('auto_scan_enabled','1')")
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('opensca_token','')")
         conn.execute("INSERT OR IGNORE INTO app_config VALUES ('license_key','')")
@@ -541,6 +542,33 @@ def get_repo_sync_status():
             "FROM repo_sync_status ORDER BY source, repo"
         ).fetchall()
         return [dict(r) for r in rows]
+
+def cleanup_repo_sync_status(source: str, existing_repos: list) -> dict:
+    """
+    清理某来源下已不存在的仓库同步记录，并同步清理对应组件清单。
+    existing_repos 为空时表示该来源已无任何仓库，应全部删除。
+    """
+    repos = [r for r in (existing_repos or []) if r]
+    with get_conn() as conn:
+        if repos:
+            ph = ','.join(['?'] * len(repos))
+            params = [source, *repos]
+            cur1 = conn.execute(
+                f"DELETE FROM repo_sync_status WHERE source=? AND repo NOT IN ({ph})",
+                params
+            )
+            cur2 = conn.execute(
+                f"DELETE FROM component_inventory WHERE source=? AND repo NOT IN ({ph})",
+                params
+            )
+        else:
+            cur1 = conn.execute("DELETE FROM repo_sync_status WHERE source=?", (source,))
+            cur2 = conn.execute("DELETE FROM component_inventory WHERE source=?", (source,))
+        conn.commit()
+        return {
+            'repo_sync_deleted': cur1.rowcount if cur1.rowcount and cur1.rowcount > 0 else 0,
+            'component_deleted': cur2.rowcount if cur2.rowcount and cur2.rowcount > 0 else 0,
+        }
 
 def replace_repo_components(scan_id: int, source: str, repo: str, components: list):
     now = datetime.now().isoformat()

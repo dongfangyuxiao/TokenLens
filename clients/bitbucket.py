@@ -178,7 +178,7 @@ def _fetch_full_tree(token, full_name: str, ref: str) -> list:
     return files
 
 
-def fetch_recent_changes(token, workspace='', since_iso=None):
+def fetch_recent_changes(token, workspace='', since_iso=None, on_repo=None, on_progress=None):
     """
     拉取 since_iso 之后的所有提交。since_iso=None 时拉取各仓库 main/master 当前快照。
     """
@@ -199,9 +199,13 @@ def fetch_recent_changes(token, workspace='', since_iso=None):
         print(f'  [Bitbucket] 获取仓库失败: {e}')
         return []
 
-    for repo in repos:
+    total_repos = len(repos)
+    for idx, repo in enumerate(repos, 1):
+        repo_results = []
         full_name = repo.get('full_name', '')
         if not full_name:
+            if on_progress:
+                on_progress(idx, total_repos, '')
             continue
 
         if since_iso is None:
@@ -211,7 +215,7 @@ def fetch_recent_changes(token, workspace='', since_iso=None):
             files = _fetch_full_tree(token, full_name, head_sha)
             if not files:
                 continue
-            results.append({
+            repo_results.append({
                 'source': 'bitbucket',
                 'repo': full_name,
                 'branch': branch,
@@ -222,6 +226,11 @@ def fetch_recent_changes(token, workspace='', since_iso=None):
                 'committed_at': '',
                 'files': files,
             })
+            if repo_results and on_repo:
+                on_repo(repo_results)
+            results.extend(repo_results)
+            if on_progress:
+                on_progress(idx, total_repos, full_name)
             continue
 
         try:
@@ -247,7 +256,7 @@ def fetch_recent_changes(token, workspace='', since_iso=None):
             author_name = (author_info.get('user', {}).get('display_name')
                            or author_info.get('raw', ''))
 
-            results.append({
+            repo_results.append({
                 'source': 'bitbucket',
                 'repo': full_name,
                 'branch': '',
@@ -258,5 +267,11 @@ def fetch_recent_changes(token, workspace='', since_iso=None):
                 'committed_at': commit.get('date', ''),
                 'files': files,
             })
+
+        if repo_results and on_repo:
+            on_repo(repo_results)
+        results.extend(repo_results)
+        if on_progress:
+            on_progress(idx, total_repos, full_name)
 
     return results

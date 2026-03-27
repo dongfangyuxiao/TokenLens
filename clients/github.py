@@ -85,14 +85,17 @@ def test_connection(token):
     except Exception as e:
         return str(e), None
 
-def fetch_recent_changes(token, owner, since_iso=None):
+def fetch_recent_changes(token, owner, since_iso=None, on_repo=None, on_progress=None):
     results = []
     repos = _get_repos(token, owner)
     print(f'  [GitHub] 共 {len(repos)} 个仓库')
 
-    for repo in repos:
+    total_repos = len(repos)
+    for idx, repo in enumerate(repos, 1):
+        repo_results = []
         repo_owner = repo['owner']['login']
         repo_name  = repo['name']
+        repo_label = f'{repo_owner}/{repo_name}'
         print(f'  [GitHub] {repo_owner}/{repo_name}')
 
         branch, head_sha, author, message = _find_head(token, repo_owner, repo_name)
@@ -104,7 +107,7 @@ def fetch_recent_changes(token, owner, since_iso=None):
             files = _fetch_full_tree(token, repo_owner, repo_name, head_sha)
             if not files:
                 continue
-            results.append({
+            repo_results.append({
                 'source'      : 'github',
                 'repo'        : f'{repo_owner}/{repo_name}',
                 'branch'      : branch,
@@ -127,7 +130,7 @@ def fetch_recent_changes(token, owner, since_iso=None):
                 files = _fetch_changed_files(token, repo_owner, repo_name, head_sha, br_name, since_iso)
                 if not files:
                     continue
-                results.append({
+                repo_results.append({
                     'source'      : 'github',
                     'repo'        : f'{repo_owner}/{repo_name}({br_name})',
                     'branch'      : br_name,
@@ -138,6 +141,12 @@ def fetch_recent_changes(token, owner, since_iso=None):
                     'committed_at': '',
                     'files'       : files,
                 })
+
+        if repo_results and on_repo:
+            on_repo(repo_results)
+        results.extend(repo_results)
+        if on_progress:
+            on_progress(idx, total_repos, repo_label)
 
     return results
 

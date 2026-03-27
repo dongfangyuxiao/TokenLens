@@ -1394,6 +1394,14 @@ body.light .empty{
           <div style="font-size:13px;color:#888;margin-bottom:16px">
             粘贴任意代码片段直接进行 AI 安全审计，无需 git commit。
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>AI 模型</label>
+              <select id="iaLlm" style="width:100%">
+                <option value="">全局配置</option>
+              </select>
+            </div>
+          </div>
           <div class="form-row col2">
             <div class="form-group">
               <label>文件名（用于匹配提示词）</label>
@@ -1421,6 +1429,14 @@ body.light .empty{
         <div id="ia_panel_upload" style="display:none">
           <div style="font-size:13px;color:#888;margin-bottom:16px">
             上传单个文件、多个文件、整个文件夹或 ZIP 压缩包，批量进行 AI 安全审计。
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>AI 模型</label>
+              <select id="iaUploadLlm" style="width:100%">
+                <option value="">全局配置</option>
+              </select>
+            </div>
           </div>
 
           <!-- 拖拽区域 -->
@@ -1910,6 +1926,18 @@ body.light .empty{
             <input id="maxDiff" type="number" min="1000" max="50000" value="12000">
           </div>
         </div>
+        <div class="form-row" style="align-items:center;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#1a1a1a">
+            <label class="toggle">
+              <input type="checkbox" id="includeConfigFiles">
+              <span class="toggle-slider"></span>
+            </label>
+            检测配置文件（默认关闭）
+          </label>
+        </div>
+        <div style="font-size:12px;color:#888;margin-bottom:12px">
+          开启后，扫描时会把 JSON/YAML/.env/TOML 等配置文件一并送检；关闭时将跳过这些配置文件，不上传给模型。
+        </div>
         <button class="btn btn-primary" onclick="saveSettings()">保存</button>
       </div>
 
@@ -2010,20 +2038,21 @@ body.light .empty{
         </div>
         <div class="form-row col2">
           <div class="form-group">
-            <label>Facility</label>
-            <select id="syslogFacility">
-              <option value="local0">local0</option>
-              <option value="local1">local1</option>
-              <option value="local2">local2</option>
-              <option value="local3">local3</option>
-              <option value="local4">local4</option>
-              <option value="local5">local5</option>
-              <option value="local6">local6</option>
-              <option value="local7">local7</option>
-              <option value="daemon">daemon</option>
-              <option value="auth">auth</option>
-              <option value="user">user</option>
+            <label>Facility（可多选）</label>
+            <select id="syslogFacility" multiple size="6" style="height:auto;min-height:132px">
+              <option value="local0">应用日志（local0）</option>
+              <option value="local1">应用日志（local1）</option>
+              <option value="local2">应用日志（local2）</option>
+              <option value="local3">应用日志（local3）</option>
+              <option value="local4">应用日志（local4）</option>
+              <option value="local5">应用日志（local5）</option>
+              <option value="local6">应用日志（local6）</option>
+              <option value="local7">应用日志（local7）</option>
+              <option value="daemon">系统服务（daemon）</option>
+              <option value="auth">认证授权（auth）</option>
+              <option value="user">用户级日志（user）</option>
             </select>
+            <div style="font-size:12px;color:#888;margin-top:6px">按住 Ctrl / Command 可多选。</div>
           </div>
           <div class="form-group">
             <label>应用标识（App Name）</label>
@@ -2426,6 +2455,7 @@ async function doLogin() {
     setToken(data.token);
     _currentUser = data.username;
     showApp();
+    loadLLMProfiles();
     loadDashboard();
     pollStatus();
   } catch(e) {
@@ -2473,7 +2503,7 @@ function loadPage(p) {
   if (p === 'emergency')  { queryComponents(); loadRepoSyncStatus(); }
   if (p === 'prompts')    { loadPrompts(); }
   if (p === 'whitelist')  { loadWhitelist(); }
-  if (p === 'instant')    { /* no pre-load needed */ }
+  if (p === 'instant')    { loadLLMProfiles(); }
   if (p === 'users')      { loadUsers(); }
   if (p === 'settings')   { loadSettings(); }
 }
@@ -2570,8 +2600,10 @@ async function pollStatus() {
     const allows = (feature) => !restrictByFeatures || licenseFeatures.includes(feature);
     if (s.scanning) {
       dot.className = s.paused ? 'status-dot paused' : 'status-dot running';
-      text.textContent = s.paused ? '已暂停' : '扫描中…';
-      if (heroScanState) heroScanState.textContent = s.paused ? 'PAUSED' : 'RUNNING';
+      const p = Number(s.progress?.percent ?? 0);
+      const ptxt = Number.isFinite(p) ? ` ${Math.max(0, Math.min(100, Math.round(p)))}%` : '';
+      text.textContent = (s.paused ? '已暂停' : '扫描中…') + ptxt;
+      if (heroScanState) heroScanState.textContent = (s.paused ? 'PAUSED' : 'RUNNING') + ptxt;
       pauseBtn.textContent = s.paused ? '继续' : '暂停';
       pauseBtn.style.display = '';
       stopBtn.style.display  = '';
@@ -2756,6 +2788,7 @@ function renderScanTable(id, scans) {
         <td style="color:#52c41a">${s.low_count}</td>
         <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           ${s.status==='done' && s.total_findings > 0 ? `<button class="btn btn-primary btn-sm" onclick="openFindings(${s.id})">查看漏洞</button>` : ''}
+          ${['running','paused'].includes(s.status) ? `<button class="btn btn-primary btn-sm" onclick="openFindings(${s.id}, true)">实时漏洞</button>` : ''}
           ${s.report_path ? `<a href="/reports/${s.report_path.split('/').pop()}" target="_blank"><button class="btn btn-default btn-sm">HTML</button></a>` : ''}
           ${s.report_path ? `<button class="btn btn-default btn-sm" onclick="exportPdf(${s.id})">PDF</button>` : ''}
           ${s.status==='done' && s.total_findings > 0 ? `<button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'json')">JSON</button><button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'markdown')">MD</button><button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'docx')">DOCX</button>` : ''}
@@ -2780,12 +2813,48 @@ let _findingsStatusFilter = 'all';
 let _repoOwnerMap = {};
 const FINDINGS_PAGE_SIZE = 50;
 let _findingsPage = 0;
+let _findingsScanId = null;
+let _findingsLiveTimer = null;
+let _findingsLiveMode = false;
 
 const FINDING_STATUS_LABEL = {new:'新增',fixing:'修复中',fixed:'已修复',wont_fix:'暂不处理'};
 const FINDING_STATUS_CLASS = {new:'badge-status-new',fixing:'badge-status-fixing',fixed:'badge-status-fixed',wont_fix:'badge-status-wont_fix'};
 
-async function openFindings(scanId) {
-  document.getElementById('findingsTitle').textContent = `漏洞详情 — 扫描 #${scanId}`;
+function _stopFindingsLiveRefresh() {
+  if (_findingsLiveTimer) {
+    clearInterval(_findingsLiveTimer);
+    _findingsLiveTimer = null;
+  }
+}
+
+async function _refreshFindings(scanId, showLoading = false) {
+  if (showLoading) {
+    document.getElementById('findingsList').innerHTML = '<div class="empty">加载中…</div>';
+  }
+  const [findings, ownerMap, scans] = await Promise.all([
+    api('GET', `/api/scans/${scanId}/findings`),
+    api('GET', '/api/repo-owner-map').catch(() => ({})),
+    _findingsLiveMode ? api('GET', '/api/scans').catch(() => []) : Promise.resolve([])
+  ]);
+  _allFindings = findings;
+  _repoOwnerMap = ownerMap;
+  if (_findingsLiveMode) {
+    const row = (scans || []).find(s => s.id === scanId);
+    const status = row?.status || 'running';
+    const liveTag = ['running', 'paused'].includes(status) ? '实时刷新中' : '已完成';
+    document.getElementById('findingsTitle').textContent =
+      `漏洞详情 — 扫描 #${scanId}（${liveTag}）`;
+    if (!['running', 'paused'].includes(status)) _stopFindingsLiveRefresh();
+  } else {
+    document.getElementById('findingsTitle').textContent = `漏洞详情 — 扫描 #${scanId}`;
+  }
+  renderFindings();
+}
+
+async function openFindings(scanId, liveMode = false) {
+  _findingsScanId = scanId;
+  _findingsLiveMode = !!liveMode;
+  _stopFindingsLiveRefresh();
   document.getElementById('findingsList').innerHTML = '<div class="empty">加载中…</div>';
   document.getElementById('findingsModal').classList.add('show');
   _findingsSev = 'all';
@@ -2795,19 +2864,31 @@ async function openFindings(scanId) {
   document.querySelector('#findings-filter [data-sev="all"]').classList.add('active');
   document.getElementById('findings-status-filter').value = 'all';
   try {
-    [_allFindings, _repoOwnerMap] = await Promise.all([
-      api('GET', `/api/scans/${scanId}/findings`),
-      api('GET', '/api/repo-owner-map').catch(() => ({}))
-    ]);
+    await _refreshFindings(scanId, false);
   } catch(e) {
     document.getElementById('findingsList').innerHTML =
       `<div class="empty" style="color:#ff4d4f">加载失败: ${esc(e.message)}</div>`;
     return;
   }
-  renderFindings();
+  if (_findingsLiveMode) {
+    _findingsLiveTimer = setInterval(async () => {
+      if (!document.getElementById('findingsModal').classList.contains('show')) {
+        _stopFindingsLiveRefresh();
+        return;
+      }
+      try {
+        await _refreshFindings(_findingsScanId, false);
+      } catch (e) {
+        _stopFindingsLiveRefresh();
+      }
+    }, 4000);
+  }
 }
 
 function closeFindingsModal() {
+  _stopFindingsLiveRefresh();
+  _findingsLiveMode = false;
+  _findingsScanId = null;
   document.getElementById('findingsModal').classList.remove('show');
 }
 
@@ -3520,7 +3601,7 @@ function populateProfileSelects() {
     const model = p.model || 'default';
     return `<option value="${p.id}">${esc(p.name)} [${esc(provider)}/${esc(model)}]</option>`;
   }).join('');
-  ['scanModalLlm','newSched-poison-llm','newSched-incremental_audit-llm','newSched-full_audit-llm'].forEach(id => {
+  ['scanModalLlm','newSched-poison-llm','newSched-incremental_audit-llm','newSched-full_audit-llm','iaLlm','iaUploadLlm'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const cur = el.value;
@@ -3812,6 +3893,7 @@ async function runInstantAnalysis() {
   const filename = document.getElementById('ia_filename').value.trim() || 'snippet.py';
   const code     = document.getElementById('ia_code').value.trim();
   const language = document.getElementById('ia_lang').value.trim();
+  const llmVal   = document.getElementById('iaLlm')?.value || '';
   if (!code) { toast('请输入代码内容', true); return; }
   const btn    = document.getElementById('iaBtn');
   const status = document.getElementById('iaStatus');
@@ -3819,7 +3901,10 @@ async function runInstantAnalysis() {
   status.textContent = '正在调用 LLM，请稍候…';
   document.getElementById('ia_result').style.display = 'none';
   try {
-    const r = await api('POST', '/api/analyze/instant', {filename, code, language});
+    const r = await api('POST', '/api/analyze/instant', {
+      filename, code, language,
+      llm_profile_id: llmVal ? parseInt(llmVal) : null
+    });
     status.textContent = `分析完成，发现 ${r.findings.length} 个问题`;
     renderInstantFindings(filename, r.findings, r.summary);
   } catch(e) {
@@ -3832,6 +3917,7 @@ async function runInstantAnalysis() {
 
 async function runInstantUpload() {
   if (!_iaFiles.length) { toast('请先选择文件', true); return; }
+  const llmVal = document.getElementById('iaUploadLlm')?.value || '';
   const btn    = document.getElementById('iaUploadBtn');
   const status = document.getElementById('iaUploadStatus');
   btn.disabled = true; btn.textContent = '分析中…';
@@ -3840,14 +3926,20 @@ async function runInstantUpload() {
 
   const fd = new FormData();
   for (const f of _iaFiles) fd.append('files', f, f.webkitRelativePath || f.name);
+  if (llmVal) fd.append('llm_profile_id', llmVal);
 
   try {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const resp  = await fetch('/api/analyze/instant-upload', {
       method: 'POST',
       headers: token ? {'Authorization': 'Bearer ' + token} : {},
       body: fd,
     });
+    if (resp.status === 401) {
+      clearToken();
+      showLogin();
+      throw new Error('会话已过期，请重新登录');
+    }
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({detail: resp.statusText}));
       throw new Error(err.detail || resp.statusText);
@@ -3941,6 +4033,7 @@ function renderInstantFindings(filename, findings, summary) {
 async function saveSettings() {
   const body = {
     max_diff_chars: document.getElementById('maxDiff').value,
+    scan_include_config_files: document.getElementById('includeConfigFiles').checked ? '1' : '0',
   };
   await api('POST', '/api/settings', body);
   toast('设置已保存');
@@ -4223,15 +4316,64 @@ function renderStatsTable(data, period) {
 }
 
 // ── 应急排查 / SCA ───────────────────────────────────────────────
-function _renderSimpleTable(elId, columns, rows) {
+const _simpleTableState = {};
+
+function _changeSimpleTablePage(elId, delta) {
+  const st = _simpleTableState[elId];
+  if (!st) return;
+  const totalPages = Math.max(1, Math.ceil((st.rows?.length || 0) / st.pageSize));
+  st.page = Math.min(totalPages - 1, Math.max(0, st.page + delta));
+  _renderSimpleTable(elId, st.columns, st.rows, st.pageSize, st.page);
+}
+
+function _setSimpleTablePageSize(elId, size) {
+  const st = _simpleTableState[elId];
+  if (!st) return;
+  const n = parseInt(size);
+  st.pageSize = [20, 50, 100].includes(n) ? n : 20;
+  st.page = 0;
+  _renderSimpleTable(elId, st.columns, st.rows, st.pageSize, st.page);
+}
+
+function _renderSimpleTable(elId, columns, rows, pageSize = 20, forcePage = 0) {
+  const existing = _simpleTableState[elId] || {};
+  const normalizedPageSize = [20, 50, 100].includes(parseInt(pageSize))
+    ? parseInt(pageSize)
+    : ([20, 50, 100].includes(parseInt(existing.pageSize)) ? parseInt(existing.pageSize) : 20);
+  _simpleTableState[elId] = {
+    columns,
+    rows: rows || [],
+    pageSize: normalizedPageSize,
+    page: forcePage || 0,
+  };
   const el = document.getElementById(elId);
   if (!rows || !rows.length) {
     el.innerHTML = '<div class="empty" style="padding:16px 0">无匹配结果</div>';
     return;
   }
+  const effectivePageSize = _simpleTableState[elId].pageSize;
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / effectivePageSize));
+  const page = Math.min(totalPages - 1, Math.max(0, forcePage || 0));
+  _simpleTableState[elId].page = page;
+  const start = page * effectivePageSize;
+  const pageRows = rows.slice(start, start + effectivePageSize);
+
   const thead = columns.map(c => `<th>${c.label}</th>`).join('');
-  const tbody = rows.map(r => `<tr>${columns.map(c => `<td>${esc(String(r[c.key] ?? ''))}</td>`).join('')}</tr>`).join('');
-  el.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+  const tbody = pageRows.map(r => `<tr>${columns.map(c => `<td>${esc(String(r[c.key] ?? ''))}</td>`).join('')}</tr>`).join('');
+  const pager = totalPages > 1 ? `
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 0 2px;font-size:12px;flex-wrap:wrap">
+      <span style="color:#888">每页</span>
+      <select onchange="_setSimpleTablePageSize('${elId}', this.value)" style="width:auto;min-width:66px;padding:2px 6px;font-size:12px">
+        <option value="20" ${effectivePageSize===20?'selected':''}>20</option>
+        <option value="50" ${effectivePageSize===50?'selected':''}>50</option>
+        <option value="100" ${effectivePageSize===100?'selected':''}>100</option>
+      </select>
+      <button class="btn btn-default btn-sm" onclick="_changeSimpleTablePage('${elId}', -1)" ${page===0?'disabled':''}>上一页</button>
+      <span style="color:#888">第 ${page + 1} / ${totalPages} 页，共 ${total} 条</span>
+      <button class="btn btn-default btn-sm" onclick="_changeSimpleTablePage('${elId}', 1)" ${page>=totalPages-1?'disabled':''}>下一页</button>
+    </div>` : '';
+  el.innerHTML = `<table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>${pager}`;
 }
 
 async function queryComponents() {
@@ -4518,6 +4660,7 @@ async function delUser(username) {
 async function loadSettings() {
   const cfg = await api('GET', '/api/settings').catch(() => ({}));
   document.getElementById('maxDiff').value = cfg.max_diff_chars || 12000;
+  document.getElementById('includeConfigFiles').checked = cfg.scan_include_config_files === '1';
   // 扫描时间点列表（三类）
   await loadScheduleList();
   // 工具 Token
@@ -4553,17 +4696,27 @@ async function loadSyslogSettings() {
   document.getElementById('syslogHost').value          = cfg.host       || '';
   document.getElementById('syslogPort').value          = cfg.port       || '514';
   document.getElementById('syslogProtocol').value      = cfg.protocol   || 'udp';
-  document.getElementById('syslogFacility').value      = cfg.facility   || 'local0';
+  const facilitySel = document.getElementById('syslogFacility');
+  const rawFacility = (cfg.facility || 'local0').split(',').map(s => s.trim()).filter(Boolean);
+  [...facilitySel.options].forEach(opt => {
+    opt.selected = rawFacility.includes(opt.value);
+  });
+  if (![...facilitySel.options].some(o => o.selected)) {
+    const fallback = [...facilitySel.options].find(o => o.value === 'local0');
+    if (fallback) fallback.selected = true;
+  }
   document.getElementById('syslogAppName').value       = cfg.app_name   || 'code-audit';
 }
 
 async function saveSyslog() {
+  const facilitySel = document.getElementById('syslogFacility');
+  const facilities = [...facilitySel.selectedOptions].map(o => o.value);
   const body = {
     enabled:  document.getElementById('syslogEnabled').checked ? '1' : '0',
     host:     document.getElementById('syslogHost').value.trim(),
     port:     document.getElementById('syslogPort').value,
     protocol: document.getElementById('syslogProtocol').value,
-    facility: document.getElementById('syslogFacility').value,
+    facility: (facilities.length ? facilities : ['local0']).join(','),
     app_name: document.getElementById('syslogAppName').value.trim() || 'code-audit',
   };
   await api('POST', '/api/syslog-config', body);
@@ -4741,6 +4894,7 @@ applyLang();
       .then(r => { if (!r.ok) throw new Error(); return r.json(); });
     _currentUser = me.username;
     showApp();
+    loadLLMProfiles();
     loadDashboard();
   } catch(e) {
     clearToken();

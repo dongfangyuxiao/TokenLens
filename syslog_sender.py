@@ -6,7 +6,7 @@ import threading
 
 _lock    = threading.Lock()
 _logger  = None
-_handler = None
+_handlers = []
 
 FACILITIES = {
     'kern':   logging.handlers.SysLogHandler.LOG_KERN,
@@ -33,48 +33,62 @@ _LEVEL_MAP = {
 }
 
 
-def _make_handler(cfg: dict):
+def _parse_facilities(raw) -> list:
+    if isinstance(raw, (list, tuple)):
+        items = [str(x).strip() for x in raw if str(x).strip()]
+    else:
+        items = [s.strip() for s in str(raw or '').split(',') if s.strip()]
+    if not items:
+        return ['local0']
+    valid = [x for x in items if x in FACILITIES]
+    return valid or ['local0']
+
+
+def _make_handlers(cfg: dict):
     host     = cfg.get('host', '').strip()
     port     = int(cfg.get('port') or 514)
     protocol = cfg.get('protocol', 'udp')
-    facility = FACILITIES.get(cfg.get('facility', 'local0'),
-                               logging.handlers.SysLogHandler.LOG_LOCAL0)
+    facilities = _parse_facilities(cfg.get('facility', 'local0'))
     socktype = socket.SOCK_STREAM if protocol == 'tcp' else socket.SOCK_DGRAM
-    h = logging.handlers.SysLogHandler(
-        address=(host, port),
-        facility=facility,
-        socktype=socktype,
-    )
     app_name = cfg.get('app_name', 'code-audit').strip() or 'code-audit'
-    h.setFormatter(logging.Formatter(f'{app_name}: %(message)s'))
-    return h
+    handlers = []
+    for fac in facilities:
+        h = logging.handlers.SysLogHandler(
+            address=(host, port),
+            facility=FACILITIES.get(fac, logging.handlers.SysLogHandler.LOG_LOCAL0),
+            socktype=socktype,
+        )
+        h.setFormatter(logging.Formatter(f'{app_name}: %(message)s'))
+        handlers.append(h)
+    return handlers
 
 
 def reload(cfg: dict):
     """根据配置重新初始化（或关闭）syslog handler，应在配置变更后调用。"""
-    global _logger, _handler
+    global _logger, _handlers
     with _lock:
-        if _handler:
+        for h in _handlers:
             try:
                 if _logger:
-                    _logger.removeHandler(_handler)
-                _handler.close()
+                    _logger.removeHandler(h)
+                h.close()
             except Exception:
                 pass
-            _handler = None
+        _handlers = []
         _logger = None
 
         if cfg.get('enabled') != '1' or not cfg.get('host', '').strip():
             return
 
         try:
-            h = _make_handler(cfg)
+            handlers = _make_handlers(cfg)
             lg = logging.getLogger('_code_audit_syslog')
             lg.handlers.clear()
-            lg.addHandler(h)
+            for h in handlers:
+                lg.addHandler(h)
             lg.setLevel(logging.DEBUG)
             lg.propagate = False
-            _handler = h
+            _handlers = handlers
             _logger  = lg
         except Exception as e:
             print(f'[syslog] 初始化失败: {e}')
@@ -101,14 +115,16 @@ def test_send(cfg: dict) -> str | None:
     if not host:
         return '未配置服务器地址'
     try:
-        h = _make_handler(cfg)
-        lg = logging.getLogger(f'_syslog_test_{id(h)}')
+        handlers = _make_handlers(cfg)
+        lg = logging.getLogger(f'_syslog_test_{id(handlers)}')
         lg.handlers.clear()
-        lg.addHandler(h)
+        for h in handlers:
+            lg.addHandler(h)
         lg.setLevel(logging.INFO)
         lg.propagate = False
         lg.info('[TEST] 代码安全审计平台 Syslog 连接测试')
-        h.close()
+        for h in handlers:
+            h.close()
         return None
     except Exception as e:
         return str(e)

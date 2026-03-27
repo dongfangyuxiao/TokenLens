@@ -1,12 +1,12 @@
 import os, json, threading, secrets, re, zipfile, io
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 import database as db
 import license_manager
@@ -60,6 +60,22 @@ _scan_lock   = threading.Lock()
 _stop_event  = threading.Event()   # set → 请求停止
 _pause_event = threading.Event()   # set → 运行中；clear → 暂停中
 _pause_event.set()
+_scan_progress_lock = threading.Lock()
+_scan_progress = {'percent': 0, 'phase': 'idle', 'message': '', 'updated_at': ''}
+
+def _set_scan_progress(percent=None, phase=None, message=None):
+    with _scan_progress_lock:
+        if percent is not None:
+            _scan_progress['percent'] = max(0, min(100, int(percent)))
+        if phase is not None:
+            _scan_progress['phase'] = phase
+        if message is not None:
+            _scan_progress['message'] = message
+        _scan_progress['updated_at'] = datetime.now().isoformat()
+
+def _get_scan_progress():
+    with _scan_progress_lock:
+        return dict(_scan_progress)
 
 _WEEKDAY_CN = ['周一','周二','周三','周四','周五','周六','周日']
 _LICENSE_WARN_DAYS = 30
@@ -136,12 +152,15 @@ def _run_in_thread(scan_type: str, llm_profile_id=None):
         return
     _stop_event.clear()
     _pause_event.set()
+    _set_scan_progress(0, 'starting', f'{scan_type} starting')
     try:
         run_scan(BASE_URL, scan_type=scan_type,
                  stop_event=_stop_event, pause_event=_pause_event,
-                 llm_profile_id=llm_profile_id)
+                 llm_profile_id=llm_profile_id,
+                 progress_cb=_set_scan_progress)
     finally:
         _scan_lock.release()
+        _set_scan_progress(0, 'idle', '')
 
 def _reschedule():
     scheduler.remove_all_jobs()
@@ -570,6 +589,7 @@ def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(requ
         raise HTTPException(400, '扫描正在进行中')
     _stop_event.clear()
     _pause_event.set()
+    _set_scan_progress(0, 'starting', f'{scan_type} starting')
     label = _SCAN_TYPE_LABELS[scan_type]
     syslog.send('info', 'SCAN', f'{label}由 {operator} 触发')
     llm_profile_id = body.llm_profile_id
@@ -577,9 +597,11 @@ def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(requ
         try:
             run_scan(BASE_URL, scan_type=scan_type,
                      stop_event=_stop_event, pause_event=_pause_event,
-                     manual=True, llm_profile_id=llm_profile_id)
+                     manual=True, llm_profile_id=llm_profile_id,
+                     progress_cb=_set_scan_progress)
         finally:
             _scan_lock.release()
+            _set_scan_progress(0, 'idle', '')
     threading.Thread(target=_run, daemon=True).start()
     return {'ok': True, 'msg': f'{label}已启动'}
 
@@ -654,6 +676,7 @@ def rerun_scan(scan_id: int, operator: str = Depends(require_auth)):
     _require_license_if_enabled(feature_key)
     _stop_event.clear()
     _pause_event.set()
+    _set_scan_progress(0, 'starting', f'{scan_type} rerun starting')
     label          = _SCAN_TYPE_LABELS.get(scan_type, scan_type)
     llm_profile_id = target.get('llm_profile_id')
     syslog.send('info', 'SCAN', f'{label}（重新运行 #{scan_id}）由 {operator} 触发')
@@ -661,9 +684,11 @@ def rerun_scan(scan_id: int, operator: str = Depends(require_auth)):
         try:
             run_scan(BASE_URL, scan_type=scan_type,
                      stop_event=_stop_event, pause_event=_pause_event,
-                     manual=True, llm_profile_id=llm_profile_id)
+                     manual=True, llm_profile_id=llm_profile_id,
+                     progress_cb=_set_scan_progress)
         finally:
             _scan_lock.release()
+            _set_scan_progress(0, 'idle', '')
     threading.Thread(target=_run, daemon=True).start()
     return {'ok': True, 'msg': f'{label}已重新启动'}
 
@@ -996,6 +1021,20 @@ class InstantAnalysisIn(BaseModel):
     filename: str
     code    : str
     language: str = ''
+    llm_profile_id: Optional[int] = None
+
+
+def _resolve_llm_config(llm_profile_id: Optional[int]):
+    if llm_profile_id:
+        profile = db.get_llm_profile(llm_profile_id)
+        if profile:
+            return {
+                'provider': profile['provider'],
+                'model': profile['model'],
+                'api_key': profile['api_key'],
+                'base_url': profile['base_url'],
+            }
+    return db.get_llm_config()
 
 @app.post('/api/analyze/instant')
 def instant_analyze(body: InstantAnalysisIn, _: str = Depends(require_auth)):
@@ -1011,7 +1050,7 @@ def instant_analyze(body: InstantAnalysisIn, _: str = Depends(require_auth)):
     if len(code) > 30000:
         raise HTTPException(400, '代码内容过长，最多 30000 字符')
 
-    llm_cfg = db.get_llm_config()
+    llm_cfg = _resolve_llm_config(body.llm_profile_id)
     call_fn = build_llm_caller(llm_cfg)
     if not call_fn:
         raise HTTPException(400, '未配置 LLM，请先在 AI 配置中填写 API Key')
@@ -1042,6 +1081,7 @@ def instant_analyze(body: InstantAnalysisIn, _: str = Depends(require_auth)):
 @app.post('/api/analyze/instant-upload')
 async def instant_analyze_upload(
     files: List[UploadFile] = File(...),
+    llm_profile_id: Optional[int] = Form(None),
     credentials: HTTPAuthorizationCredentials = Depends(_http_bearer)
 ):
     """上传文件/文件夹/压缩包进行 LLM 安全分析。"""
@@ -1053,7 +1093,7 @@ async def instant_analyze_upload(
     _MAX_TOTAL_SIZE = 1_000_000 # 总计最大 1 MB
     _MAX_FILES      = 50        # 最多分析 50 个文件
 
-    llm_cfg = db.get_llm_config()
+    llm_cfg = _resolve_llm_config(llm_profile_id)
     call_fn = build_llm_caller(llm_cfg)
     if not call_fn:
         raise HTTPException(400, '未配置 LLM，请先在 AI 配置中填写 API Key')
@@ -1175,6 +1215,7 @@ def status(_: str = Depends(require_auth)):
         'scheduler_running': scheduler.running,
         'scanning'         : scanning,
         'paused'           : scanning and not _pause_event.is_set(),
+        'progress'         : _get_scan_progress() if scanning else None,
         'schedules'        : schedules_out,
         'license'          : _get_license_status(),
     }

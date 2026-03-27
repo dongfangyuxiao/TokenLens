@@ -84,7 +84,7 @@ def test_connection(token, base_url='https://gitlab.com'):
     except Exception as e:
         return str(e), None
 
-def fetch_recent_changes(token, base_url='https://gitlab.com', since_iso=None):
+def fetch_recent_changes(token, base_url='https://gitlab.com', since_iso=None, on_repo=None, on_progress=None):
     results = []
     try:
         repos = _paginate(base_url, token, '/projects', {'membership': True})
@@ -93,8 +93,12 @@ def fetch_recent_changes(token, base_url='https://gitlab.com', since_iso=None):
         return []
 
     print(f'  [GitLab] 共 {len(repos)} 个仓库')
-    for repo in repos:
+    total_repos = len(repos)
+    for idx, repo in enumerate(repos, 1):
+        repo_results = []
         if repo.get('marked_for_deletion_at'):
+            if on_progress:
+                on_progress(idx, total_repos, repo.get('path_with_namespace', ''))
             continue
         pid  = repo['id']
         name = repo['path_with_namespace']
@@ -109,7 +113,7 @@ def fetch_recent_changes(token, base_url='https://gitlab.com', since_iso=None):
             files = _fetch_full_tree(base_url, token, pid, head_sha)
             if not files:
                 continue
-            results.append({
+            repo_results.append({
                 'source'      : 'gitlab',
                 'repo'        : name,
                 'branch'      : branch,
@@ -131,7 +135,7 @@ def fetch_recent_changes(token, base_url='https://gitlab.com', since_iso=None):
                 files = _fetch_changed_files(base_url, token, pid, head_sha, br_name, since_iso)
                 if not files:
                     continue
-                results.append({
+                repo_results.append({
                     'source'      : 'gitlab',
                     'repo'        : f'{name}({br_name})',
                     'branch'      : br_name,
@@ -142,6 +146,12 @@ def fetch_recent_changes(token, base_url='https://gitlab.com', since_iso=None):
                     'committed_at': '',
                     'files'       : files,
                 })
+
+        if repo_results and on_repo:
+            on_repo(repo_results)
+        results.extend(repo_results)
+        if on_progress:
+            on_progress(idx, total_repos, name)
 
     return results
 
