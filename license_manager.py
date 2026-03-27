@@ -7,6 +7,7 @@ import os
 import socket
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 DEFAULT_PRODUCT = 'SpringStillness'
@@ -111,6 +112,15 @@ def _build_parser():
     gen.add_argument('--machine-id', default='', help='绑定实例 ID，可选')
     gen.add_argument('--metadata', default='{}', help='扩展 JSON 元数据，可选')
 
+    gen_file = sub.add_parser('generate-file', help='生成授权文件（JSON）')
+    gen_file.add_argument('--customer', required=True, help='客户名称')
+    gen_file.add_argument('--expires-at', required=True, help='过期时间，ISO8601 格式，例如 2027-03-31T23:59:59Z')
+    gen_file.add_argument('--product', default=DEFAULT_PRODUCT, help='产品名称')
+    gen_file.add_argument('--feature', action='append', default=[], help='功能点，可重复传入')
+    gen_file.add_argument('--machine-id', default='', help='绑定实例 ID，可选')
+    gen_file.add_argument('--metadata', default='{}', help='扩展 JSON 元数据，可选')
+    gen_file.add_argument('--output', default='license.json', help='输出文件路径')
+
     verify = sub.add_parser('verify', help='校验授权码')
     verify.add_argument('--license-key', required=True, help='授权码')
     verify.add_argument('--product', default=DEFAULT_PRODUCT, help='产品名称')
@@ -131,6 +141,22 @@ def main():
             metadata=json.loads(args.metadata or '{}'),
         )
         print(generate_license(payload))
+        return
+    if args.command == 'generate-file':
+        payload = build_payload(
+            customer=args.customer,
+            expires_at=args.expires_at,
+            product=args.product,
+            features=args.feature,
+            machine_id=args.machine_id,
+            metadata=json.loads(args.metadata or '{}'),
+        )
+        license_key = generate_license(payload)
+        out = {**payload, 'license_key': license_key}
+        path = Path(args.output)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding='utf-8')
+        print(str(path))
         return
     result = verify_license(
         args.license_key,

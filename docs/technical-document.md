@@ -498,6 +498,9 @@ Authorization: Bearer <token>
 | POST | `/api/settings` | 更新系统配置 |
 | GET | `/api/license-status` | 获取产品授权状态 |
 | POST | `/api/license-config` | 保存授权码与授权拦截开关 |
+| GET | `/api/license/machine-file` | 下载当前实例机器码文件（JSON） |
+| POST | `/api/license/upload-file` | 上传授权文件并应用 |
+| POST | `/api/license/generate-file` | 按机器码生成授权文件并下载 |
 | GET | `/api/admin-users` | 用户列表 |
 | POST | `/api/admin-users` | 创建用户 |
 | PATCH | `/api/admin-users/{username}/password` | 修改密码 |
@@ -753,8 +756,8 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 
 **新增**
 - 产品授权模块 `license_manager.py`，支持 HMAC-SHA256 授权码签发与校验
-- 系统设置新增授权码录入、实例 ID 展示、授权状态查看与授权校验开关
-- 新增 `/api/license-status` 与 `/api/license-config` 两个授权接口
+- 系统设置新增授权码录入、授权文件上传、机器码文件下载、实例 ID 展示、授权状态查看与授权校验开关
+- 新增 `/api/license-status`、`/api/license-config`、`/api/license/machine-file`、`/api/license/upload-file`、`/api/license/generate-file` 授权接口
 - 新增授权临期提醒、界面授权水印，以及基于 `features` 的能力控制
 
 **说明**

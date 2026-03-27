@@ -2001,6 +2001,45 @@ body.light .empty{
         </div>
         <div class="form-row col2">
           <div class="form-group">
+            <label>上传授权文件（.json/.lic/.txt）</label>
+            <input id="licenseFile" type="file" accept=".json,.lic,.txt,application/json,text/plain">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+            <button class="btn btn-default" onclick="uploadLicenseFile()">上传并应用</button>
+            <button class="btn btn-default" onclick="downloadMachineFile()">下载机器码文件</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#888;margin:-4px 0 10px">
+          建议先下载机器码文件发给授权签发方；收到授权文件后在此上传即可生效。
+        </div>
+        <div style="margin:10px 0 8px;font-size:13px;font-weight:600;color:#333">授权文件生成（按机器码）</div>
+        <div class="form-row col2">
+          <div class="form-group">
+            <label>客户名称</label>
+            <input id="licenseGenCustomer" placeholder="如：Acme Corp">
+          </div>
+          <div class="form-group">
+            <label>到期时间</label>
+            <input id="licenseGenExpiresAt" type="datetime-local">
+          </div>
+        </div>
+        <div class="form-row col2">
+          <div class="form-group">
+            <label>机器码（默认当前实例）</label>
+            <input id="licenseGenMachineId" placeholder="不填则使用当前实例 ID">
+          </div>
+          <div class="form-group">
+            <label>功能点（逗号分隔，可选）</label>
+            <input id="licenseGenFeatures" placeholder="poison_scan,incremental_audit,full_audit,instant_analysis">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <button class="btn btn-default" onclick="generateLicenseFile()">生成授权文件并下载</button>
+          </div>
+        </div>
+        <div class="form-row col2">
+          <div class="form-group">
             <label>客户</label>
             <input id="licenseCustomer" readonly placeholder="-">
           </div>
@@ -4924,6 +4963,8 @@ async function testSyslog() {
 async function loadLicenseStatus() {
   const status = await api('GET', '/api/license-status').catch(() => ({}));
   document.getElementById('licenseInstanceId').value = status.instance_id || '';
+  const machineEl = document.getElementById('licenseGenMachineId');
+  if (machineEl && !machineEl.value.trim()) machineEl.value = status.instance_id || '';
   document.getElementById('licenseStateText').value = status.message || '未配置授权码';
   document.getElementById('licenseCustomer').value = status.customer || '-';
   document.getElementById('licenseExpiresAt').value = status.expires_at || '-';
@@ -4949,6 +4990,106 @@ async function saveLicenseConfig() {
   });
   toast('授权配置已保存');
   await loadLicenseStatus();
+}
+
+async function uploadLicenseFile() {
+  const fileEl = document.getElementById('licenseFile');
+  const f = fileEl?.files?.[0];
+  if (!f) { toast('请先选择授权文件', true); return; }
+  const fd = new FormData();
+  fd.append('file', f, f.name || 'license.json');
+  fd.append('enforce_enabled', document.getElementById('licenseEnforceEnabled').checked ? 'true' : 'false');
+  try {
+    const token = getToken();
+    const resp = await fetch('/api/license/upload-file', {
+      method: 'POST',
+      headers: token ? {'Authorization': 'Bearer ' + token} : {},
+      body: fd
+    });
+    if (resp.status === 401) {
+      clearToken(); showLogin();
+      throw new Error('会话已过期，请重新登录');
+    }
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({detail: resp.statusText}));
+      throw new Error(err.detail || resp.statusText);
+    }
+    toast('授权文件已上传并生效');
+    fileEl.value = '';
+    await loadLicenseStatus();
+  } catch(e) {
+    toast(e.message || '上传失败', true);
+  }
+}
+
+async function downloadMachineFile() {
+  try {
+    const token = getToken();
+    const resp = await fetch('/api/license/machine-file', {
+      method: 'GET',
+      headers: token ? {'Authorization': 'Bearer ' + token} : {},
+    });
+    if (resp.status === 401) {
+      clearToken(); showLogin();
+      throw new Error('会话已过期，请重新登录');
+    }
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({detail: resp.statusText}));
+      throw new Error(err.detail || resp.statusText);
+    }
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'machine_id.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch(e) {
+    toast(e.message || '下载失败', true);
+  }
+}
+
+async function generateLicenseFile() {
+  const customer = document.getElementById('licenseGenCustomer')?.value.trim() || '';
+  const expiresRaw = document.getElementById('licenseGenExpiresAt')?.value || '';
+  const machineId = document.getElementById('licenseGenMachineId')?.value.trim() || '';
+  const featuresRaw = document.getElementById('licenseGenFeatures')?.value.trim() || '';
+  if (!customer) { toast('请填写客户名称', true); return; }
+  if (!expiresRaw) { toast('请选择到期时间', true); return; }
+  const expiresAt = new Date(expiresRaw).toISOString();
+  const features = featuresRaw ? featuresRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+  try {
+    const token = getToken();
+    const resp = await fetch('/api/license/generate-file', {
+      method: 'POST',
+      headers: {
+        ...(token ? {'Authorization': 'Bearer ' + token} : {}),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        customer,
+        expires_at: expiresAt,
+        machine_id: machineId,
+        features
+      })
+    });
+    if (resp.status === 401) {
+      clearToken(); showLogin();
+      throw new Error('会话已过期，请重新登录');
+    }
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({detail: resp.statusText}));
+      throw new Error(err.detail || resp.statusText);
+    }
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'license.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('授权文件已生成');
+  } catch(e) {
+    toast(e.message || '生成失败', true);
+  }
 }
 
 // ── 主题切换 ──────────────────────────────────────────────────────

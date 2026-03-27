@@ -616,6 +616,14 @@ class LicenseConfigIn(BaseModel):
     replace_license_key: bool = False
     enforce_enabled: bool = False
 
+class LicenseGenerateIn(BaseModel):
+    customer: str
+    expires_at: str
+    machine_id: str = ''
+    features: List[str] = []
+    product: str = license_manager.DEFAULT_PRODUCT
+    metadata: dict = {}
+
 
 @app.post('/api/license-config')
 def save_license_config(body: LicenseConfigIn, _: str = Depends(require_auth)):
@@ -623,6 +631,84 @@ def save_license_config(body: LicenseConfigIn, _: str = Depends(require_auth)):
         db.set_app_config('license_key', body.license_key.strip())
     db.set_app_config('license_enforce_enabled', '1' if body.enforce_enabled else '0')
     return {'ok': True, 'status': _get_license_status()}
+
+@app.get('/api/license/machine-file')
+def download_machine_file(_: str = Depends(require_auth)):
+    payload = {
+        'product': license_manager.DEFAULT_PRODUCT,
+        'instance_id': license_manager.get_instance_id(),
+        'generated_at': datetime.now().isoformat(),
+    }
+    content = json.dumps(payload, ensure_ascii=False, indent=2)
+    fname = f'machine_id_{payload["instance_id"]}.json'
+    return Response(
+        content=content.encode('utf-8'),
+        media_type='application/json; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="{fname}"'}
+    )
+
+@app.post('/api/license/upload-file')
+async def upload_license_file(
+    file: UploadFile = File(...),
+    enforce_enabled: Optional[bool] = Form(None),
+    _: str = Depends(require_auth),
+):
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, '授权文件为空')
+    if len(raw) > 200_000:
+        raise HTTPException(400, '授权文件过大')
+
+    text = raw.decode('utf-8', errors='replace').strip()
+    if not text:
+        raise HTTPException(400, '授权文件内容为空')
+
+    license_key = ''
+    if text.startswith('{'):
+        try:
+            data = json.loads(text)
+            license_key = (data.get('license_key') or data.get('token') or '').strip()
+        except Exception:
+            raise HTTPException(400, '授权文件不是有效 JSON')
+    else:
+        license_key = text
+    if not license_key:
+        raise HTTPException(400, '授权文件中未找到 license_key')
+
+    db.set_app_config('license_key', license_key)
+    if enforce_enabled is not None:
+        db.set_app_config('license_enforce_enabled', '1' if enforce_enabled else '0')
+    return {'ok': True, 'status': _get_license_status()}
+
+@app.post('/api/license/generate-file')
+def generate_license_file(body: LicenseGenerateIn, _: str = Depends(require_auth)):
+    customer = (body.customer or '').strip()
+    if not customer:
+        raise HTTPException(400, '客户名称不能为空')
+    expires_at = (body.expires_at or '').strip()
+    if not license_manager._parse_iso8601(expires_at):
+        raise HTTPException(400, '过期时间格式不正确，请使用 ISO8601 格式')
+
+    machine_id = (body.machine_id or '').strip() or license_manager.get_instance_id()
+    features = [str(x).strip() for x in (body.features or []) if str(x).strip()]
+    payload = license_manager.build_payload(
+        customer=customer,
+        expires_at=expires_at,
+        product=(body.product or license_manager.DEFAULT_PRODUCT).strip() or license_manager.DEFAULT_PRODUCT,
+        features=features,
+        machine_id=machine_id,
+        metadata=body.metadata or {},
+    )
+    license_key = license_manager.generate_license(payload)
+    out = {**payload, 'license_key': license_key}
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_customer = re.sub(r'[^0-9A-Za-z._-]+', '_', customer)[:32] or 'customer'
+    fname = f'license_{safe_customer}_{machine_id[:8]}_{ts}.json'
+    return Response(
+        content=json.dumps(out, ensure_ascii=False, indent=2).encode('utf-8'),
+        media_type='application/json; charset=utf-8',
+        headers={'Content-Disposition': f'attachment; filename="{fname}"'}
+    )
 
 # ── 扫描时间表 API ────────────────────────────────────────────────
 _VALID_TYPES = {'poison', 'incremental_audit', 'full_audit'}

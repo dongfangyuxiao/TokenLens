@@ -208,6 +208,26 @@ python3 license_manager.py generate \
 可重复追加 `--feature` 写入功能点，例如 `--feature full_audit --feature instant_analysis`。
 若不传 `--feature`，则默认表示授权不限制功能点。
 
+### 生成授权文件（推荐）
+
+系统设置已支持“上传授权文件”。
+
+先在目标部署机器的 **系统设置 → 产品授权** 下载机器码文件，或复制实例 ID，然后在签发环境执行：
+
+```bash
+python3 license_manager.py generate-file \
+  --customer 'Acme Corp' \
+  --expires-at '2027-12-31T23:59:59Z' \
+  --machine-id '目标机器实例ID' \
+  --feature poison_scan \
+  --feature incremental_audit \
+  --feature full_audit \
+  --feature instant_analysis \
+  --output ./license_acme.json
+```
+
+将生成的 `license_acme.json` 在系统设置中上传即可生效。
+
 ### 校验授权码
 
 ```bash

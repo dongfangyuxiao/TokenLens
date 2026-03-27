@@ -16,6 +16,7 @@
 - 系统设置新增“配置文件检测”开关（默认关闭）；关闭时配置文件不送检，开启后纳入检测
 - 新增 Docker 部署支持：提供 `Dockerfile`、`docker-compose.yml`、`.dockerignore`，并支持 `DB_PATH/REPORTS_DIR/SYNC_ROOT` 路径配置
 - 增加源码防泄漏与防抄袭基础能力：`LICENSE`、`SECURITY.md`、`pre-commit` 密钥拦截脚本、交付保护文档
+- 授权功能增强：系统设置支持上传授权文件、下载机器码文件、按机器码在线生成授权文件并下载
 
 ## 2026-03-26
 
