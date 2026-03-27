@@ -1476,7 +1476,15 @@ body.light .empty{
 
       <div id="ia_result" style="display:none">
         <div class="card">
-          <div class="card-title" id="ia_result_title">分析结果</div>
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <span id="ia_result_title">分析结果</span>
+            <div id="ia_export_actions" style="display:none;gap:6px;flex-wrap:wrap">
+              <button class="btn btn-default btn-sm" onclick="exportInstantReport('html')">HTML</button>
+              <button class="btn btn-default btn-sm" onclick="exportInstantReport('pdf')">PDF</button>
+              <button class="btn btn-default btn-sm" onclick="exportInstantReport('docx')">WORD</button>
+              <button class="btn btn-default btn-sm" onclick="exportInstantReport('markdown')">MD</button>
+            </div>
+          </div>
           <div id="ia_findings"></div>
         </div>
       </div>
@@ -3802,6 +3810,13 @@ const SEVERITY_ZH_MAP    = {critical:'严重',high:'高危',medium:'中危',low:
 
 let _iaMode = 'paste';  // 'paste' | 'upload'
 let _iaFiles = [];      // 已选择的 File 对象
+let _instantExportData = null;
+
+function _setInstantExportData(mode, files) {
+  _instantExportData = {mode, files: files || []};
+  const bar = document.getElementById('ia_export_actions');
+  if (bar) bar.style.display = (_instantExportData.files && _instantExportData.files.length) ? 'flex' : 'none';
+}
 
 function iaTab(mode) {
   _iaMode = mode;
@@ -3887,6 +3902,7 @@ function iaClearFiles() {
   iaShowFileList();
   document.getElementById('ia_result').style.display = 'none';
   document.getElementById('iaUploadStatus').textContent = '';
+  _setInstantExportData('upload', []);
 }
 
 async function runInstantAnalysis() {
@@ -3900,6 +3916,7 @@ async function runInstantAnalysis() {
   btn.disabled = true; btn.textContent = '分析中…';
   status.textContent = '正在调用 LLM，请稍候…';
   document.getElementById('ia_result').style.display = 'none';
+  _setInstantExportData('single', []);
   try {
     const r = await api('POST', '/api/analyze/instant', {
       filename, code, language,
@@ -3923,6 +3940,7 @@ async function runInstantUpload() {
   btn.disabled = true; btn.textContent = '分析中…';
   status.textContent = `正在上传 ${_iaFiles.length} 个文件，请稍候…`;
   document.getElementById('ia_result').style.display = 'none';
+  _setInstantExportData('upload', []);
 
   const fd = new FormData();
   for (const f of _iaFiles) fd.append('files', f, f.webkitRelativePath || f.name);
@@ -3963,6 +3981,7 @@ function renderInstantUploadResults(files) {
 
   const totalFindings = files.reduce((s, f) => s + f.findings.length, 0);
   title.textContent = `分析结果 — ${files.length} 个文件，共发现 ${totalFindings} 个问题`;
+  _setInstantExportData('upload', files);
 
   const parts = [];
   for (const file of files) {
@@ -4001,6 +4020,12 @@ function renderInstantFindings(filename, findings, summary) {
   const counts = {critical:0,high:0,medium:0,low:0};
   findings.forEach(f => { counts[f.severity] = (counts[f.severity]||0)+1; });
   title.textContent = `分析结果 — ${filename}：发现 ${findings.length} 个问题`;
+  _setInstantExportData('single', [{
+    filename,
+    summary: summary || '',
+    findings: findings || [],
+    error: false
+  }]);
   if (!findings.length) {
     el.innerHTML = '<div style="color:#52c41a;padding:16px 0">✅ 未发现安全问题。' + (summary ? esc(summary) : '') + '</div>';
     return;
@@ -4026,6 +4051,47 @@ function renderInstantFindings(filename, findings, summary) {
         ${f.recommendation ? `<div class="fi-rec">${esc(f.recommendation)}</div>` : ''}
       </div>`)
   ].join('');
+}
+
+async function exportInstantReport(fmt) {
+  if (!_instantExportData || !_instantExportData.files || !_instantExportData.files.length) {
+    toast('暂无可导出的分析结果', true);
+    return;
+  }
+  const token = getToken();
+  const url = `/api/analyze/instant/export?format=${fmt}`;
+  const extMap = {html:'html', pdf:'pdf', docx:'docx', markdown:'md'};
+  try {
+    if (!token) {
+      showLogin();
+      throw new Error('请先登录');
+    }
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(_instantExportData)
+    });
+    if (resp.status === 401) {
+      clearToken();
+      showLogin();
+      throw new Error('会话已过期，请重新登录');
+    }
+    if (!resp.ok) {
+      const e = await resp.json().catch(() => ({detail: resp.statusText}));
+      throw new Error(e.detail || '导出失败');
+    }
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `instant_report.${extMap[fmt] || fmt}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch(e) {
+    toast(e.message || '导出失败', true);
+  }
 }
 
 // ── 设置 ──────────────────────────────────────────────────────────

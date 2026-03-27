@@ -50,6 +50,35 @@ def sync_repo_snapshot(source: str, repo: str, files: list) -> tuple[str, int]:
     return target, written
 
 
+def cleanup_synced_repos(source: str, existing_repos: list) -> int:
+    """
+    清理某来源下已不存在的本地仓库快照目录。
+    返回删除的仓库目录数量。
+    """
+    src = _safe_segment(source or 'unknown').replace('/', '_')
+    src_root = Path(SYNC_ROOT) / src
+    if not src_root.exists() or not src_root.is_dir():
+        return 0
+
+    keep = {_safe_segment(normalize_repo_name(r)) for r in (existing_repos or []) if r}
+    deleted = 0
+    for repo_dir in src_root.iterdir():
+        if not repo_dir.is_dir():
+            continue
+        if repo_dir.name not in keep:
+            shutil.rmtree(repo_dir, ignore_errors=True)
+            deleted += 1
+
+    # 来源目录空了则顺带清理
+    try:
+        next(src_root.iterdir())
+    except StopIteration:
+        src_root.rmdir()
+    except Exception:
+        pass
+    return deleted
+
+
 def search_synced_code(keyword: str, case_sensitive: bool = False,
                        repo: str = '', source: str = '',
                        limit: int = 200) -> list:

@@ -10,7 +10,7 @@ from reporter  import build_report
 from notifier  import notify_all
 import database as db
 import syslog_sender as syslog
-from repo_sync import sync_repo_snapshot, normalize_repo_name
+from repo_sync import sync_repo_snapshot, normalize_repo_name, cleanup_synced_repos
 from sbom import extract_components_from_files
 
 REPORTS_DIR = 'reports'
@@ -386,8 +386,11 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
                     continue
                 existing = sorted(source_seen_repos.get(source, set()))
                 deleted = db.cleanup_repo_sync_status(source, existing)
+                fs_deleted = cleanup_synced_repos(source, existing)
                 if deleted.get('repo_sync_deleted', 0):
                     log('info', f'  [{source}] 已清理失效仓库 {deleted["repo_sync_deleted"]} 个')
+                if fs_deleted:
+                    log('info', f'  [{source}] 已清理本地失效快照 {fs_deleted} 个')
 
         if not scan_results:
             log('info', '无新提交，扫描结束')

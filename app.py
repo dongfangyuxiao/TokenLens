@@ -1,4 +1,4 @@
-import os, json, threading, secrets, re, zipfile, io
+import os, json, threading, secrets, re, zipfile, io, html as _html
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, FileResponse, Response
@@ -51,6 +51,26 @@ db.mark_interrupted_scans()
 syslog.reload(db.get_syslog_config())
 app = FastAPI(title='春静企业代码安全平台')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
+
+
+@app.middleware('http')
+async def security_headers_middleware(request, call_next):
+    response = await call_next(request)
+    path = request.url.path or ''
+    if path.startswith('/reports/') and path.endswith('.html'):
+        # 报告页安全头：限制资源来源，降低 XSS 利用风险
+        response.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "base-uri 'none'; "
+            "object-src 'none'; "
+            "frame-ancestors 'none'; "
+            "img-src 'self' data:; "
+            "style-src 'self' 'unsafe-inline'; "
+            "script-src 'self' 'unsafe-inline'"
+        )
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['Referrer-Policy'] = 'no-referrer'
+    return response
 
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
 
@@ -1024,6 +1044,18 @@ class InstantAnalysisIn(BaseModel):
     llm_profile_id: Optional[int] = None
 
 
+class InstantExportFileIn(BaseModel):
+    filename: str
+    summary: str = ''
+    error: bool = False
+    findings: List[dict] = []
+
+
+class InstantExportIn(BaseModel):
+    mode: str = 'upload'
+    files: List[InstantExportFileIn] = []
+
+
 def _resolve_llm_config(llm_profile_id: Optional[int]):
     if llm_profile_id:
         profile = db.get_llm_profile(llm_profile_id)
@@ -1035,6 +1067,172 @@ def _resolve_llm_config(llm_profile_id: Optional[int]):
                 'base_url': profile['base_url'],
             }
     return db.get_llm_config()
+
+
+def _build_instant_markdown(files: list) -> str:
+    sev_zh = {'critical': '严重', 'high': '高危', 'medium': '中危', 'low': '低危'}
+    lines = [
+        '# 即时分析报告',
+        '',
+        f'> 生成时间：{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}',
+        ''
+    ]
+    total = 0
+    for f in files:
+        findings = f.get('findings', []) or []
+        total += len(findings)
+        lines.append(f'## 文件：{f.get("filename", "")}')
+        if f.get('error'):
+            lines.append(f'- 状态：失败')
+            lines.append(f'- 原因：{f.get("summary", "")}')
+            lines.append('')
+            continue
+        lines.append(f'- 发现问题：{len(findings)}')
+        if f.get('summary'):
+            lines.append(f'- 摘要：{f.get("summary", "")}')
+        lines.append('')
+        for i, item in enumerate(findings, 1):
+            sev = sev_zh.get(item.get('severity', 'low'), item.get('severity', 'low'))
+            lines += [
+                f'### {i}. [{sev}] {item.get("title", "")}',
+                f'- 位置：`{item.get("filename") or f.get("filename","")}`'
+                + (f' 第 {item.get("line")} 行' if item.get('line') else ''),
+                f'- 描述：{item.get("description", "")}',
+            ]
+            if item.get('recommendation'):
+                lines.append(f'- 修复建议：{item.get("recommendation", "")}')
+            lines.append('')
+    lines.insert(3, f'> 文件数：{len(files)}，问题总数：{total}')
+    return '\n'.join(lines)
+
+
+def _build_instant_html(files: list) -> str:
+    sev_color = {'critical': '#ff4d4f', 'high': '#fa8c16', 'medium': '#d4b106', 'low': '#52c41a'}
+    sev_zh = {'critical': '严重', 'high': '高危', 'medium': '中危', 'low': '低危'}
+    total = sum(len(f.get('findings', []) or []) for f in files)
+    parts = ["""<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>即时分析报告</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;background:#f5f5f5;color:#1a1a1a;padding:20px}
+.c{max-width:960px;margin:0 auto}.card{background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.sev{font-size:11px;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700}.title{font-size:14px;font-weight:700}.meta{font-size:12px;color:#888}
+.desc{font-size:13px;color:#555;line-height:1.6}.rec{font-size:12px;color:#1677ff;background:#f0f5ff;border-radius:6px;padding:8px 10px}
+</style></head><body><div class="c">"""]
+    parts.append(f"<h2>即时分析报告</h2><div class='meta'>生成时间：{_html.escape(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}；文件数：{len(files)}；问题总数：{total}</div><br>")
+    for f in files:
+        fn = _html.escape(str(f.get('filename', '')))
+        summary = _html.escape(str(f.get('summary', '')))
+        findings = f.get('findings', []) or []
+        parts.append(f"<div class='card'><div class='title'>📄 {fn}</div><div class='meta'>发现问题：{len(findings)}</div>")
+        if f.get('error'):
+            parts.append(f"<div class='meta' style='color:#ff4d4f'>分析失败：{summary}</div></div>")
+            continue
+        if summary:
+            parts.append(f"<div class='meta'>摘要：{summary}</div>")
+        for item in findings:
+            sev = item.get('severity', 'low')
+            parts.append("<hr style='border:none;border-top:1px solid #f0f0f0;margin:10px 0'>")
+            parts.append(
+                f"<span class='sev' style='background:{sev_color.get(sev, '#888')}'>{_html.escape(sev_zh.get(sev, sev))}</span> "
+                f"<span class='title'>{_html.escape(str(item.get('title','')))}</span>"
+            )
+            line = f" 第 {_html.escape(str(item.get('line')))} 行" if item.get('line') else ''
+            parts.append(f"<div class='meta'>位置：{_html.escape(str(item.get('filename') or f.get('filename','')))}{line}</div>")
+            parts.append(f"<div class='desc'>{_html.escape(str(item.get('description','')))}</div>")
+            if item.get('recommendation'):
+                parts.append(f"<div class='rec'>修复建议：{_html.escape(str(item.get('recommendation')))}</div>")
+        parts.append("</div>")
+    parts.append("</div></body></html>")
+    return ''.join(parts)
+
+
+def _build_instant_docx(files: list) -> bytes:
+    from docx import Document
+    doc = Document()
+    doc.add_heading('即时分析报告', 0)
+    total = sum(len(f.get('findings', []) or []) for f in files)
+    doc.add_paragraph(f'生成时间：{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+    doc.add_paragraph(f'文件数：{len(files)}，问题总数：{total}')
+    sev_zh = {'critical': '严重', 'high': '高危', 'medium': '中危', 'low': '低危'}
+    for f in files:
+        doc.add_heading(f'文件：{f.get("filename", "")}', level=1)
+        if f.get('error'):
+            doc.add_paragraph(f'分析失败：{f.get("summary", "")}')
+            continue
+        if f.get('summary'):
+            doc.add_paragraph(f'摘要：{f.get("summary", "")}')
+        findings = f.get('findings', []) or []
+        if not findings:
+            doc.add_paragraph('未发现安全问题')
+            continue
+        for i, item in enumerate(findings, 1):
+            sev = sev_zh.get(item.get('severity', 'low'), item.get('severity', 'low'))
+            doc.add_heading(f'{i}. [{sev}] {item.get("title", "")}', level=2)
+            loc = f'{item.get("filename") or f.get("filename","")}'
+            if item.get('line'):
+                loc += f' 第 {item.get("line")} 行'
+            doc.add_paragraph(f'位置：{loc}')
+            doc.add_paragraph(f'描述：{item.get("description", "")}')
+            if item.get('recommendation'):
+                doc.add_paragraph(f'修复建议：{item.get("recommendation", "")}')
+    buf = io.BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def _build_instant_pdf(files: list) -> bytes:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen import canvas
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
+    y = h - 36
+    c.setFont('STSong-Light', 12)
+
+    def write_line(txt: str):
+        nonlocal y
+        if y < 40:
+            c.showPage()
+            c.setFont('STSong-Light', 12)
+            y = h - 36
+        c.drawString(36, y, txt[:120])
+        y -= 16
+
+    total = sum(len(f.get('findings', []) or []) for f in files)
+    write_line('即时分析报告')
+    write_line(f'生成时间：{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+    write_line(f'文件数：{len(files)}，问题总数：{total}')
+    write_line('')
+    sev_zh = {'critical': '严重', 'high': '高危', 'medium': '中危', 'low': '低危'}
+    for f in files:
+        write_line(f'文件：{f.get("filename", "")}')
+        if f.get('error'):
+            write_line(f'分析失败：{f.get("summary", "")}')
+            write_line('')
+            continue
+        if f.get('summary'):
+            write_line(f'摘要：{f.get("summary", "")}')
+        findings = f.get('findings', []) or []
+        if not findings:
+            write_line('未发现安全问题')
+            write_line('')
+            continue
+        for i, item in enumerate(findings, 1):
+            sev = sev_zh.get(item.get('severity', 'low'), item.get('severity', 'low'))
+            write_line(f'{i}. [{sev}] {item.get("title", "")}')
+            loc = f'{item.get("filename") or f.get("filename","")}'
+            if item.get('line'):
+                loc += f' 第 {item.get("line")} 行'
+            write_line(f'位置：{loc}')
+            if item.get('description'):
+                write_line(f'描述：{item.get("description", "")}')
+            if item.get('recommendation'):
+                write_line(f'建议：{item.get("recommendation", "")}')
+            write_line('')
+    c.save()
+    return buf.getvalue()
 
 @app.post('/api/analyze/instant')
 def instant_analyze(body: InstantAnalysisIn, _: str = Depends(require_auth)):
@@ -1189,6 +1387,44 @@ async def instant_analyze_upload(
     results.sort(key=lambda r: r['filename'])
     total_findings = sum(len(r['findings']) for r in results)
     return {'files': results, 'total_findings': total_findings}
+
+
+@app.post('/api/analyze/instant/export')
+def export_instant_report(body: InstantExportIn, format: str = 'html', _: str = Depends(require_auth)):
+    if format not in ('html', 'pdf', 'docx', 'markdown'):
+        raise HTTPException(400, '无效格式，可选：html / pdf / docx / markdown')
+    files = [f.model_dump() for f in (body.files or [])]
+    if not files:
+        raise HTTPException(400, '暂无可导出的分析结果')
+    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    if format == 'html':
+        content = _build_instant_html(files)
+        return Response(
+            content=content.encode('utf-8'),
+            media_type='text/html; charset=utf-8',
+            headers={'Content-Disposition': f'attachment; filename="instant_report_{ts}.html"'}
+        )
+    if format == 'markdown':
+        content = _build_instant_markdown(files)
+        return Response(
+            content=content.encode('utf-8'),
+            media_type='text/markdown; charset=utf-8',
+            headers={'Content-Disposition': f'attachment; filename="instant_report_{ts}.md"'}
+        )
+    if format == 'docx':
+        content = _build_instant_docx(files)
+        return Response(
+            content=content,
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            headers={'Content-Disposition': f'attachment; filename="instant_report_{ts}.docx"'}
+        )
+    content = _build_instant_pdf(files)
+    return Response(
+        content=content,
+        media_type='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename="instant_report_{ts}.pdf"'}
+    )
 
 
 @app.get('/api/status')

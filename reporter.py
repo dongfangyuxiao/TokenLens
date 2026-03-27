@@ -1,7 +1,8 @@
 """报告生成模块 —— 支持 HTML / Markdown / JSON 三种格式"""
 import json
 from datetime import datetime
-from jinja2 import Template
+from urllib.parse import urlparse
+from jinja2 import Environment, select_autoescape
 
 SEVERITY_ORDER = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
 SEVERITY_COLOR = {
@@ -11,6 +12,21 @@ SEVERITY_COLOR = {
     'low'     : '#52c41a',
 }
 SEVERITY_ZH = {'critical': '严重', 'high': '高危', 'medium': '中危', 'low': '低危'}
+
+_JINJA_ENV = Environment(autoescape=select_autoescape(default_for_string=True, default=True))
+
+
+def _safe_http_url(url: str) -> str:
+    u = (url or '').strip()
+    if not u:
+        return ''
+    try:
+        p = urlparse(u)
+        if p.scheme in ('http', 'https'):
+            return u
+    except Exception:
+        pass
+    return ''
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -173,13 +189,17 @@ def build_report(scan_results):
         total_files += len(item.get('files', []))
         repos.append({**item, 'findings': findings})
 
-    html = Template(HTML_TEMPLATE).render(
+    repos_view = []
+    for r in repos:
+        repos_view.append({**r, 'commit_url': _safe_http_url(r.get('commit_url', ''))})
+
+    html = _JINJA_ENV.from_string(HTML_TEMPLATE).render(
         scan_time      = datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         total_commits  = len(scan_results),
         total_files    = total_files,
         total_findings = total_findings,
         counts         = counts,
-        repos          = repos,
+        repos          = repos_view,
         severity_color = SEVERITY_COLOR,
         severity_zh    = SEVERITY_ZH,
     )
