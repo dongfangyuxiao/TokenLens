@@ -1,7 +1,7 @@
 import os, json, threading, secrets, re, zipfile, io, html as _html, subprocess, tempfile, shutil
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
-from fastapi.responses import HTMLResponse, FileResponse, Response
+from fastapi.responses import HTMLResponse, FileResponse, Response, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -22,10 +22,13 @@ from clients.bitbucket import test_connection as bitbucket_test
 from clients.gitee     import test_connection as gitee_test
 
 # ── 登录鉴权 ──────────────────────────────────────────────────────
-_sessions: dict = {}          # token -> username
+_sessions: dict = {}          # token -> {'username': str, 'expires_at': datetime, 'last_seen': datetime}
 _login_attempts: dict = {}    # username -> {'count': int, 'lock_until': datetime|None}
 _MAX_ATTEMPTS = 5
 _LOCK_MINUTES = 10
+_SESSION_TTL_MINUTES = max(10, int(os.getenv('SESSION_TTL_MINUTES', '720')))   # 默认 12 小时
+_SESSION_IDLE_MINUTES = max(5, int(os.getenv('SESSION_IDLE_MINUTES', '120')))  # 默认 2 小时
+_REPORTS_REQUIRE_AUTH = os.getenv('REPORTS_REQUIRE_AUTH', '1') == '1'
 
 _http_bearer = HTTPBearer(auto_error=False)
 
@@ -41,10 +44,71 @@ def _check_password_strength(password: str):
         return '密码必须包含数字'
     return None
 
+def _safe_http_url(url: str) -> str:
+    u = (url or '').strip()
+    if not u:
+        return ''
+    try:
+        p = urlparse(u)
+        if p.scheme in ('http', 'https'):
+            return u
+    except Exception:
+        pass
+    return ''
+
+def _mask_secret(text: str, secret: str) -> str:
+    if not text:
+        return ''
+    if not secret:
+        return text
+    try:
+        masked = text.replace(secret, '***')
+        masked = masked.replace(quote(secret, safe=''), '***')
+        return masked
+    except Exception:
+        return text
+
+def _purge_expired_sessions():
+    now = datetime.now()
+    dead = []
+    for tok, sess in list(_sessions.items()):
+        expires_at = sess.get('expires_at') if isinstance(sess, dict) else None
+        last_seen = sess.get('last_seen') if isinstance(sess, dict) else None
+        if not isinstance(expires_at, datetime) or not isinstance(last_seen, datetime):
+            dead.append(tok)
+            continue
+        if now > expires_at or now - last_seen > timedelta(minutes=_SESSION_IDLE_MINUTES):
+            dead.append(tok)
+    for tok in dead:
+        _sessions.pop(tok, None)
+
+def _issue_session(username: str) -> str:
+    now = datetime.now()
+    token = secrets.token_hex(32)
+    _sessions[token] = {
+        'username': username,
+        'expires_at': now + timedelta(minutes=_SESSION_TTL_MINUTES),
+        'last_seen': now,
+    }
+    return token
+
+def _auth_token_to_user(token: str, touch: bool = True) -> str:
+    _purge_expired_sessions()
+    if not token:
+        return ''
+    sess = _sessions.get(token)
+    if not isinstance(sess, dict):
+        return ''
+    if touch:
+        sess['last_seen'] = datetime.now()
+    return sess.get('username', '')
+
 def require_auth(credentials: HTTPAuthorizationCredentials = Depends(_http_bearer)):
-    if not credentials or credentials.credentials not in _sessions:
+    token = credentials.credentials if credentials else ''
+    username = _auth_token_to_user(token, touch=True)
+    if not username:
         raise HTTPException(status_code=401, detail='未授权，请先登录')
-    return _sessions[credentials.credentials]
+    return username
 
 # ── 初始化 ────────────────────────────────────────────────────────
 db.init_db()
@@ -56,8 +120,24 @@ app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], all
 
 @app.middleware('http')
 async def security_headers_middleware(request, call_next):
-    response = await call_next(request)
     path = request.url.path or ''
+    if _REPORTS_REQUIRE_AUTH and path.startswith('/reports/'):
+        token = ''
+        authz = request.headers.get('authorization', '')
+        if authz.lower().startswith('bearer '):
+            token = authz[7:].strip()
+        if not token:
+            token = (request.query_params.get('token') or '').strip()
+        if not _auth_token_to_user(token, touch=True):
+            return PlainTextResponse('未授权，请先登录后查看报告', status_code=401)
+
+    response = await call_next(request)
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    response.headers['Permissions-Policy'] = (
+        'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+    )
     if path.startswith('/reports/') and path.endswith('.html'):
         # 报告页安全头：限制资源来源，降低 XSS 利用风险
         response.headers['Content-Security-Policy'] = (
@@ -69,8 +149,6 @@ async def security_headers_middleware(request, call_next):
             "style-src 'self' 'unsafe-inline'; "
             "script-src 'self' 'unsafe-inline'"
         )
-        response.headers['X-Content-Type-Options'] = 'nosniff'
-        response.headers['Referrer-Policy'] = 'no-referrer'
     return response
 
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
@@ -256,15 +334,15 @@ def login(body: LoginIn):
 
     # 登录成功
     _login_attempts.pop(username, None)
-    token = secrets.token_hex(32)
-    _sessions[token] = username
+    token = _issue_session(username)
     syslog.send('info', 'AUTH', f'登录成功: {username}')
     return {'token': token, 'username': username}
 
 @app.post('/api/logout')
 def logout(credentials: HTTPAuthorizationCredentials = Depends(_http_bearer)):
     if credentials and credentials.credentials in _sessions:
-        user = _sessions.pop(credentials.credentials)
+        sess = _sessions.pop(credentials.credentials)
+        user = sess.get('username') if isinstance(sess, dict) else str(sess)
         syslog.send('info', 'AUTH', f'登出: {user}')
     return {'ok': True}
 
@@ -353,7 +431,10 @@ class AccountTestIn(BaseModel):
 def test_account(body: AccountTestIn, _: str = Depends(require_auth)):
     platform = body.platform
     token    = body.token
-    url      = body.url.strip() or 'https://gitlab.com'
+    raw_url  = body.url.strip()
+    if raw_url and not _safe_http_url(raw_url):
+        raise HTTPException(400, '服务器地址格式不正确，仅支持 http/https')
+    url      = raw_url or 'https://gitlab.com'
     if platform == 'github':
         err, user = github_test(token)
     elif platform == 'bitbucket':
@@ -367,7 +448,7 @@ def test_account(body: AccountTestIn, _: str = Depends(require_auth)):
     else:  # gitlab
         err, user = gitlab_test(token, url)
     if err:
-        raise HTTPException(400, f'连接失败: {err}')
+        raise HTTPException(400, f'连接失败: {_mask_secret(str(err), token)}')
     return {'ok': True, 'msg': f'连接成功，当前用户: {user}'}
 
 # ── 通知渠道 API ──────────────────────────────────────────────────
@@ -718,7 +799,10 @@ def rerun_scan(scan_id: int, operator: str = Depends(require_auth)):
 
 @app.get('/api/scans/{scan_id}/findings')
 def get_findings(scan_id: int, _: str = Depends(require_auth)):
-    return db.get_scan_findings(scan_id)
+    rows = db.get_scan_findings(scan_id)
+    for r in rows:
+        r['commit_url'] = _safe_http_url(r.get('commit_url', ''))
+    return rows
 
 @app.get('/api/scans/{scan_id}/logs')
 def get_scan_logs(scan_id: int, _: str = Depends(require_auth)):
@@ -833,6 +917,7 @@ def get_finding(finding_id: int, _: str = Depends(require_auth)):
     f = db.get_finding_detail(finding_id)
     if not f:
         raise HTTPException(404, '漏洞不存在')
+    f['commit_url'] = _safe_http_url(f.get('commit_url', ''))
     return f
 
 class FindingStatusIn(BaseModel):
@@ -1465,6 +1550,8 @@ async def instant_analyze_upload(
     # 收集 (filename, content_bytes) 列表
     collected: list[tuple[str, bytes]] = []
     total_bytes = 0
+    _MAX_ZIP_ENTRY_SIZE = _INSTANT_MAX_FILE_SIZE
+    _MAX_ZIP_RATIO = 200  # 解压比阈值，避免 zip bomb
 
     for upload in files:
         raw = await upload.read()
@@ -1481,6 +1568,12 @@ async def instant_analyze_upload(
                         entry_name = entry.filename.lstrip('/')
                         if not _instant_should_analyze(entry_name, runtime['audit_extensions'], runtime['skip_extensions']):
                             continue
+                        if entry.file_size > _MAX_ZIP_ENTRY_SIZE:
+                            continue
+                        if entry.compress_size > 0 and (entry.file_size / max(1, entry.compress_size)) > _MAX_ZIP_RATIO:
+                            continue
+                        if total_bytes + max(0, entry.file_size) > _INSTANT_MAX_TOTAL_SIZE:
+                            break
                         data = zf.read(entry)
                         if len(data) > _INSTANT_MAX_FILE_SIZE:
                             continue

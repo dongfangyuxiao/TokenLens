@@ -129,7 +129,11 @@ h1{font-size:22px;font-weight:700;margin-bottom:4px}
       <span class="repo-name">{{ repo_data.repo }}</span>
       <span class="source-tag source-{{ repo_data.source }}">{{ repo_data.source }}</span>
       <span class="commit-info">
-        <a class="commit-link" href="{{ repo_data.commit_url }}" target="_blank">{{ repo_data.commit_sha[:7] }}</a>
+        {% if repo_data.commit_url %}
+        <a class="commit-link" href="{{ repo_data.commit_url }}" target="_blank" rel="noopener noreferrer">{{ repo_data.commit_sha[:7] }}</a>
+        {% else %}
+        {{ repo_data.commit_sha[:7] }}
+        {% endif %}
         　{{ repo_data.author }}：{{ repo_data.message }}
         　{{ repo_data.committed_at }}
       </span>

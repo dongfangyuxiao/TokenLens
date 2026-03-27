@@ -2864,7 +2864,7 @@ function renderScanTable(id, scans) {
         <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           ${s.status==='done' && s.total_findings > 0 ? `<button class="btn btn-primary btn-sm" onclick="openFindings(${s.id})">查看漏洞</button>` : ''}
           ${['running','paused'].includes(s.status) ? `<button class="btn btn-primary btn-sm" onclick="openFindings(${s.id}, true)">实时漏洞</button>` : ''}
-          ${s.report_path ? `<a href="/reports/${s.report_path.split('/').pop()}" target="_blank"><button class="btn btn-default btn-sm">HTML</button></a>` : ''}
+          ${s.report_path ? `<a href="${buildReportUrl(s.report_path)}" target="_blank" rel="noopener noreferrer"><button class="btn btn-default btn-sm">HTML</button></a>` : ''}
           ${s.report_path ? `<button class="btn btn-default btn-sm" onclick="exportPdf(${s.id})">PDF</button>` : ''}
           ${s.status==='done' && s.total_findings > 0 ? `<button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'json')">JSON</button><button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'markdown')">MD</button><button class="btn btn-default btn-sm" onclick="exportScan(${s.id},'docx')">DOCX</button>` : ''}
           <button class="btn btn-default btn-sm" onclick="openScanLogs(${s.id})">日志</button>
@@ -3064,8 +3064,9 @@ function _renderFindingDetail(f) {
 
   // 元数据网格
   const sha7 = String(f.commit_sha || '').slice(0, 7) || '—';
-  const commitLink = f.commit_url
-    ? `<a href="${esc(f.commit_url)}" target="_blank" style="color:#16a34a">${sha7}</a>`
+  const commitUrl = safeHttpUrl(f.commit_url);
+  const commitLink = commitUrl
+    ? `<a href="${esc(commitUrl)}" target="_blank" rel="noopener noreferrer" style="color:#16a34a">${sha7}</a>`
     : sha7;
   const metaGrid = `
     <div class="fd-meta-grid">
@@ -3151,7 +3152,7 @@ function _renderFindingItem(f) {
     <div class="fi-desc">${esc(f.description)}</div>
     ${f.recommendation ? `<div class="fi-rec">${esc(f.recommendation)}</div>` : ''}
     <div class="fi-commit">
-      commit ${f.commit_url ? `<a href="${esc(f.commit_url)}" target="_blank" style="color:#16a34a">${String(f.commit_sha||'').slice(0,7)||'—'}</a>` : String(f.commit_sha||'').slice(0,7)||'—'}
+      commit ${safeHttpUrl(f.commit_url) ? `<a href="${esc(safeHttpUrl(f.commit_url))}" target="_blank" rel="noopener noreferrer" style="color:#16a34a">${String(f.commit_sha||'').slice(0,7)||'—'}</a>` : String(f.commit_sha||'').slice(0,7)||'—'}
       &nbsp;·&nbsp;${esc(f.author)}&nbsp;·&nbsp;${fmtTime(f.committed_at)}
     </div>
     <div class="fi-status">
@@ -3209,6 +3210,19 @@ function renderFindings() {
 
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function safeHttpUrl(u) {
+  const s = String(u || '').trim();
+  if (!s) return '';
+  return /^https?:\/\//i.test(s) ? s : '';
+}
+
+function buildReportUrl(reportPath) {
+  const base = String(reportPath || '').split('/').pop();
+  if (!base) return '';
+  const t = getToken();
+  return t ? `/reports/${base}?token=${encodeURIComponent(t)}` : `/reports/${base}`;
 }
 
 // ── 账户 ──────────────────────────────────────────────────────────
