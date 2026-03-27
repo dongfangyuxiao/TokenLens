@@ -593,6 +593,7 @@ _SCAN_TYPE_LABELS = {
 class ScanTrigger(BaseModel):
     scan_type     : str  = 'incremental_audit'
     llm_profile_id: int  = None
+    selected_sources: List[str] = []
     # 旧版兼容
     full_scan     : bool = False
 
@@ -613,11 +614,13 @@ def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(requ
     label = _SCAN_TYPE_LABELS[scan_type]
     syslog.send('info', 'SCAN', f'{label}由 {operator} 触发')
     llm_profile_id = body.llm_profile_id
+    selected_sources = body.selected_sources or []
     def _run():
         try:
             run_scan(BASE_URL, scan_type=scan_type,
                      stop_event=_stop_event, pause_event=_pause_event,
                      manual=True, llm_profile_id=llm_profile_id,
+                     selected_sources=selected_sources,
                      progress_cb=_set_scan_progress)
         finally:
             _scan_lock.release()

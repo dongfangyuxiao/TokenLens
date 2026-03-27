@@ -2387,7 +2387,7 @@ body.light .empty{
 
 <!-- 扫描触发弹窗 -->
 <div class="modal-mask" id="scanTriggerModal" onclick="if(event.target===this)closeScanModal()">
-  <div class="modal" style="width:460px">
+  <div class="modal" style="width:520px">
     <div class="scan-modal-body">
       <div class="scan-modal-icon" id="scanModalIcon">🔍</div>
       <div class="scan-modal-title" id="scanModalTitle"></div>
@@ -2398,6 +2398,11 @@ body.light .empty{
       <select id="scanModalLlm" style="width:100%">
         <option value="" data-i18n="modal.globalAI">全局 AI 配置</option>
       </select>
+    </div>
+    <div class="form-group" style="margin-bottom:20px">
+      <label>选择代码平台（可多选，留空=全部）</label>
+      <select id="scanModalSources" multiple size="6" style="width:100%;height:auto;min-height:140px"></select>
+      <div style="font-size:12px;color:#888;margin-top:6px">按住 Ctrl / Command 可多选。</div>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end">
       <button class="btn btn-default" onclick="closeScanModal()" data-i18n="btn.cancel">取消</button>
@@ -2712,6 +2717,25 @@ async function deleteScan(id) {
 
 // ── 触发扫描 ──────────────────────────────────────────────────────
 let _pendingScanType = null;
+let _scanModalSourcesLoaded = false;
+
+async function loadScanModalSources() {
+  const sel = document.getElementById('scanModalSources');
+  if (!sel) return;
+  const accounts = await api('GET', '/api/accounts').catch(() => []);
+  const known = ['github', 'gitlab', 'bitbucket', 'gitee', 'tgit', 'codeup'];
+  const set = new Set((accounts || []).map(a => (a.platform || '').toLowerCase()).filter(Boolean));
+  const items = [...set].sort((a, b) => {
+    const ia = known.indexOf(a); const ib = known.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  const labels = {github:'GitHub',gitlab:'GitLab',bitbucket:'Bitbucket',gitee:'Gitee',tgit:'TGit',codeup:'Codeup'};
+  sel.innerHTML = items.map(src => `<option value="${esc(src)}">${esc(labels[src] || src)}</option>`).join('');
+  _scanModalSourcesLoaded = true;
+}
 
 function triggerScan(scanType) {
   _pendingScanType = scanType;
@@ -2731,6 +2755,9 @@ function triggerScan(scanType) {
   document.getElementById('scanModalIcon').textContent  = m.icon || '🔍';
   document.getElementById('scanModalTitle').textContent = isEn ? (m.titleEn || scanType) : (m.titleZh || scanType);
   document.getElementById('scanModalDesc').textContent  = isEn ? (m.descEn || '') : (m.descZh || '');
+  const srcSel = document.getElementById('scanModalSources');
+  if (srcSel) [...srcSel.options].forEach(o => { o.selected = false; });
+  loadScanModalSources();
   openModal('scanTriggerModal');
 }
 
@@ -2747,7 +2774,13 @@ async function doTriggerScan() {
   allBtns.forEach(b => { if (b) b.disabled = true; });
   try {
     const llmProfileId = parseInt(document.getElementById('scanModalLlm')?.value) || null;
-    const res = await api('POST', '/api/scan/trigger', {scan_type: scanType, llm_profile_id: llmProfileId});
+    const srcSel = document.getElementById('scanModalSources');
+    const selectedSources = srcSel ? [...srcSel.selectedOptions].map(o => o.value) : [];
+    const res = await api('POST', '/api/scan/trigger', {
+      scan_type: scanType,
+      llm_profile_id: llmProfileId,
+      selected_sources: selectedSources
+    });
     toast(res.msg || (_lang === 'en' ? `${label} started` : `${label}已启动`));
     setTimeout(() => loadPage(currentPage), 3000);
   } catch(e) {

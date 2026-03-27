@@ -88,6 +88,7 @@ def _check(stop_event, pause_event):
 
 def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
             stop_event=None, pause_event=None, manual=False, llm_profile_id=None,
+            selected_sources=None,
             progress_cb=None):
     """
     执行一次完整扫描。
@@ -132,6 +133,9 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
 
         _report_progress(0, 'starting', '准备开始')
         accounts   = db.get_accounts()
+        selected_sources = selected_sources or []
+        source_filters = {str(s).strip().lower() for s in selected_sources if str(s).strip()}
+        has_source_filter = bool(source_filters)
         if llm_profile_id:
             _profile = db.get_llm_profile(llm_profile_id)
             llm_cfg  = {
@@ -199,12 +203,26 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
         def _source_group(platform: str) -> str:
             return 'gitlab' if platform in ('gitlab', 'tgit', 'codeup') else platform
 
+        def _source_allowed(source: str) -> bool:
+            if not has_source_filter:
+                return True
+            src = (source or '').strip().lower()
+            return src in source_filters
+
         def _process_items(items):
             nonlocal suppressed_total, _quota_paused, scan_results
             if not items:
                 return
 
             raw_items = items
+            if has_source_filter:
+                before_items = len(raw_items)
+                raw_items = [it for it in raw_items if _source_allowed(it.get('source', ''))]
+                skipped_items = before_items - len(raw_items)
+                if skipped_items:
+                    log('info', f'  代码平台过滤已跳过 {skipped_items} 条提交记录')
+                if not raw_items:
+                    return
             if scan_type == 'full_audit':
                 for snapshot in raw_items:
                     try:
