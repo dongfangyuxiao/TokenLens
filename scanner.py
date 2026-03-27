@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timezone, timedelta
 from clients.github    import fetch_recent_changes as github_changes
 from clients.gitlab    import fetch_recent_changes as gitlab_changes
+from clients.gitlab    import test_connection as gitlab_test
 from clients.bitbucket import fetch_recent_changes as bitbucket_changes
 from clients.gitee     import fetch_recent_changes as gitee_changes
 from analyzer  import analyze_commit, LLMQuotaExhausted
@@ -132,10 +133,23 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
                 pass
 
         _report_progress(0, 'starting', '准备开始')
+        def _source_group(platform: str) -> str:
+            return 'gitlab' if platform in ('gitlab', 'tgit', 'codeup') else platform
+
         accounts   = db.get_accounts()
         selected_sources = selected_sources or []
-        source_filters = {str(s).strip().lower() for s in selected_sources if str(s).strip()}
+        source_filters = {
+            _source_group(str(s).strip().lower())
+            for s in selected_sources if str(s).strip()
+        }
         has_source_filter = bool(source_filters)
+        if has_source_filter:
+            before_accounts = len(accounts)
+            accounts = [acc for acc in accounts if _source_group(acc.get('platform', '')) in source_filters]
+            skipped_accounts = before_accounts - len(accounts)
+            if skipped_accounts:
+                log('info', f'代码平台过滤已跳过 {skipped_accounts} 个账户')
+            log('info', f'本次扫描平台过滤: {", ".join(sorted(source_filters))}')
         if llm_profile_id:
             _profile = db.get_llm_profile(llm_profile_id)
             llm_cfg  = {
@@ -179,7 +193,10 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
             log('info', f'白名单条目: {len(whitelist)} 条')
 
         if not accounts:
-            log('warning', '未配置任何代码平台账户，扫描跳过')
+            if has_source_filter:
+                log('warning', '所选代码平台下无可用账户，扫描跳过')
+            else:
+                log('warning', '未配置任何代码平台账户，扫描跳过')
             db.finish_scan(scan_id, 0, {'critical':0,'high':0,'medium':0,'low':0}, '')
             return scan_id
 
@@ -199,9 +216,6 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
             ratio = (completed_accounts + current_account_ratio) / denom
             # 保留 99% 给最终完成态
             _report_progress(min(99, int(ratio * 100)), phase, message)
-
-        def _source_group(platform: str) -> str:
-            return 'gitlab' if platform in ('gitlab', 'tgit', 'codeup') else platform
 
         def _source_allowed(source: str) -> bool:
             if not has_source_filter:
@@ -366,6 +380,9 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
                         'codeup': 'https://codeup.aliyun.com',
                     }
                     url = acc.get('url', '').strip() or _default_urls[platform]
+                    err, _user = gitlab_test(acc['token'], url)
+                    if err:
+                        raise RuntimeError(f'GitLab 接口访问失败: {err}')
                     items = gitlab_changes(
                         acc['token'],
                         url,
@@ -374,9 +391,13 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
                         on_progress=_on_repo_progress
                     )
                 else:
+                    url = acc.get('url', 'https://gitlab.com')
+                    err, _user = gitlab_test(acc['token'], url)
+                    if err:
+                        raise RuntimeError(f'GitLab 接口访问失败: {err}')
                     items = gitlab_changes(
                         acc['token'],
-                        acc.get('url', 'https://gitlab.com'),
+                        url,
                         scan_since_iso,
                         on_repo=_process_items,
                         on_progress=_on_repo_progress
