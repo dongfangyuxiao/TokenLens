@@ -419,7 +419,14 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
                 continue
 
         if scan_type == 'full_audit' and not _quota_paused:
-            for source in sorted(source_fetch_ok):
+            cleanup_sources = sorted(source_fetch_ok)
+            if has_source_filter:
+                cleanup_sources = [s for s in cleanup_sources if s in source_filters]
+                if cleanup_sources:
+                    log('info', f'  全量清理仅作用于本次选中平台: {", ".join(cleanup_sources)}')
+                else:
+                    log('info', '  本次未成功拉取任何选中平台，跳过陈旧仓库清理')
+            for source in cleanup_sources:
                 if source in source_fetch_failed:
                     log('warning', f'  [{source}] 本轮存在拉取失败，跳过陈旧仓库清理')
                     continue
