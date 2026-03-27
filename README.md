@@ -137,6 +137,30 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 
 浏览器访问 `http://localhost:8000`，默认账号密码：`admin / admin123`（首次登录后请立即修改）。
 
+**Docker 部署**
+
+```bash
+docker compose up -d --build
+```
+
+启动后访问 `http://localhost:8000`。  
+持久化数据默认在宿主机 `./data` 目录（数据库、报告、同步仓库快照）。
+镜像构建默认不会打包本机 `.env`、数据库、报告文件和同步快照目录。
+
+## 源码保护与防泄漏
+
+- 仓库内置 `pre-commit` 密钥拦截配置：`.pre-commit-config.yaml`
+- 提供基础安全策略：`SECURITY.md`
+- 提供交付与防抄袭建议：`docs/delivery-and-ip-protection.md`
+
+启用提交前拦截：
+
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
 **环境变量**
 
 | 变量 | 说明 | 默认值 |
@@ -144,6 +168,12 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 | `BASE_URL` | 报告链接前缀，用于通知消息中的跳转地址 | `http://localhost:8000` |
 | `LICENSE_SECRET` | 产品授权签名密钥，生成与校验授权码时必须一致 | `springstillness-dev-license-secret` |
 | `PRODUCT_INSTANCE_ID` | 手工指定当前实例 ID；不设置时自动按主机信息生成 | 自动生成 |
+| `DB_PATH` | SQLite 数据库文件路径 | `audit.db` |
+| `REPORTS_DIR` | 报告目录（`/reports` 静态映射来源） | `reports` |
+| `SYNC_ROOT` | 全量快照同步目录 | `synced_repos` |
+| `REPORTS_REQUIRE_AUTH` | 是否要求登录后访问报告（`1` 开启） | `1` |
+| `SESSION_TTL_MINUTES` | 会话绝对有效期（分钟） | `720` |
+| `SESSION_IDLE_MINUTES` | 会话空闲超时（分钟） | `120` |
 
 ## 产品授权
 

@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: secret-guard
+        name: Secret Guard
+        entry: python3 scripts/guard_secrets.py
+        language: system
+        types: [text]
+        pass_filenames: true

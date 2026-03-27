@@ -14,6 +14,8 @@
 - 应急排查结果改为分页展示，支持每页 20/50/100 切换，避免超长页面
 - Syslog facility 改为可多选，并增加中文说明标签（如“应用日志（local0）”）
 - 系统设置新增“配置文件检测”开关（默认关闭）；关闭时配置文件不送检，开启后纳入检测
+- 新增 Docker 部署支持：提供 `Dockerfile`、`docker-compose.yml`、`.dockerignore`，并支持 `DB_PATH/REPORTS_DIR/SYNC_ROOT` 路径配置
+- 增加源码防泄漏与防抄袭基础能力：`LICENSE`、`SECURITY.md`、`pre-commit` 密钥拦截脚本、交付保护文档
 
 ## 2026-03-26
 

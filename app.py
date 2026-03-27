@@ -152,6 +152,7 @@ async def security_headers_middleware(request, call_next):
     return response
 
 BASE_URL = os.getenv('BASE_URL', 'http://localhost:8000')
+REPORTS_DIR = os.getenv('REPORTS_DIR', 'reports')
 
 # ── 定时任务 ──────────────────────────────────────────────────────
 scheduler    = BackgroundScheduler()
@@ -289,9 +290,9 @@ _reschedule()
 scheduler.start()
 
 # ── 静态文件 ──────────────────────────────────────────────────────
-os.makedirs('reports', exist_ok=True)
+os.makedirs(REPORTS_DIR, exist_ok=True)
 os.makedirs('static', exist_ok=True)
-app.mount('/reports', StaticFiles(directory='reports'), name='reports')
+app.mount('/reports', StaticFiles(directory=REPORTS_DIR), name='reports')
 
 @app.get('/', response_class=HTMLResponse)
 def index():

@@ -3,7 +3,7 @@ import re
 import shutil
 from pathlib import Path
 
-SYNC_ROOT = 'synced_repos'
+SYNC_ROOT = os.getenv('SYNC_ROOT', 'synced_repos')
 _MAX_FILE_BYTES = 2 * 1024 * 1024
 
 

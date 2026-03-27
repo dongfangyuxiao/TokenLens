@@ -6,7 +6,7 @@ import binascii
 from datetime import datetime, date, timedelta
 from default_prompts import FRONTEND_PROMPT, BACKEND_PROMPT, CONTRACT_PROMPT
 
-DB_PATH = 'audit.db'
+DB_PATH = os.getenv('DB_PATH', 'audit.db')
 
 
 def _hash_password(password: str, salt: str = None):

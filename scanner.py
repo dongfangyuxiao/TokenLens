@@ -14,7 +14,7 @@ import syslog_sender as syslog
 from repo_sync import sync_repo_snapshot, normalize_repo_name, cleanup_synced_repos
 from sbom import extract_components_from_files
 
-REPORTS_DIR = 'reports'
+REPORTS_DIR = os.getenv('REPORTS_DIR', 'reports')
 CONFIG_EXTENSIONS = {
     '.json', '.yaml', '.yml', '.toml', '.env', '.ini', '.conf', '.cfg',
     '.properties', '.xml', '.lock', '.sum'

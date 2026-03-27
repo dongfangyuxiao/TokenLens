@@ -1,0 +1,17 @@
+services:
+  springstillness:
+    build: .
+    container_name: springstillness
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      BASE_URL: ${BASE_URL:-http://localhost:8000}
+      DB_PATH: /app/data/audit.db
+      REPORTS_DIR: /app/data/reports
+      SYNC_ROOT: /app/data/synced_repos
+      REPORTS_REQUIRE_AUTH: ${REPORTS_REQUIRE_AUTH:-1}
+      SESSION_TTL_MINUTES: ${SESSION_TTL_MINUTES:-720}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-120}
+    volumes:
+      - ./data:/app/data
