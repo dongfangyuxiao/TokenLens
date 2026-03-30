@@ -90,7 +90,7 @@ def _check(stop_event, pause_event):
 def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
             stop_event=None, pause_event=None, manual=False, llm_profile_id=None,
             llm_profile_ids=None, llm_consensus_mode='single',
-            auto_optimize_skills=False,
+            llm_role_config=None, optimize_skills=False, auto_optimize_skills=False,
             selected_sources=None,
             progress_cb=None):
     """
@@ -109,6 +109,8 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
         llm_profile_id=llm_profile_id,
         llm_profile_ids=llm_profile_ids,
         llm_consensus_mode=llm_consensus_mode,
+        llm_role_config=llm_role_config,
+        optimize_skills=optimize_skills,
     )
 
     _MODE_LABELS = {
@@ -157,18 +159,37 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
             if skipped_accounts:
                 log('info', f'代码平台过滤已跳过 {skipped_accounts} 个账户')
             log('info', f'本次扫描平台过滤: {", ".join(sorted(source_filters))}')
-        selected_profile_ids = [int(x) for x in (llm_profile_ids or []) if str(x).strip()]
+        role_cfg = db._normalize_role_config(llm_role_config, llm_profile_ids, llm_profile_id)
+        selected_profile_ids = []
+        for role in ('audit', 'check', 'verify'):
+            for raw in role_cfg.get(role, []) or []:
+                try:
+                    val = int(raw)
+                except Exception:
+                    continue
+                if val > 0 and val not in selected_profile_ids:
+                    selected_profile_ids.append(val)
         if not selected_profile_ids and llm_profile_id:
             selected_profile_ids = [int(llm_profile_id)]
         if selected_profile_ids:
             profiles = db.get_llm_profiles_by_ids(selected_profile_ids)
-            llm_cfgs = [{
-                'provider': p['provider'],
-                'model':    p['model'],
-                'api_key':  p['api_key'],
-                'base_url': p['base_url'],
-            } for p in profiles]
-            auto_optimize_skills = auto_optimize_skills or any(
+            profile_map = {int(p['id']): p for p in profiles}
+            llm_cfgs = []
+            for role in ('audit', 'check', 'verify'):
+                for pid in role_cfg.get(role, []) or []:
+                    p = profile_map.get(int(pid))
+                    if not p:
+                        continue
+                    llm_cfgs.append({
+                        'provider': p['provider'],
+                        'model':    p['model'],
+                        'api_key':  p['api_key'],
+                        'base_url': p['base_url'],
+                        '__role': role,
+                        '__profile_id': int(pid),
+                        '__profile_name': p.get('name', ''),
+                    })
+            auto_optimize_skills = optimize_skills or auto_optimize_skills or any(
                 int(p.get('auto_optimize_skills') or 0) == 1 for p in profiles
             )
         else:
@@ -204,7 +225,7 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
         provider = llm_cfg.get('provider', '')
         log('info', f'LLM 提供商: {provider or "未配置（使用静态扫描）"}')
         if selected_profile_ids:
-            log('info', f'交叉审计链: {selected_profile_ids} / mode={llm_consensus_mode}')
+            log('info', f'交叉审计链: audit={role_cfg.get("audit", [])} check={role_cfg.get("check", [])} verify={role_cfg.get("verify", [])}')
             log('info', f'自动优化 skills: {"开启" if auto_optimize_skills else "关闭"}')
         if whitelist:
             log('info', f'白名单条目: {len(whitelist)} 条')
@@ -319,6 +340,7 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
                         stop_event=stop_event,
                         llm_consensus_mode=llm_consensus_mode,
                         auto_optimize_skills=auto_optimize_skills,
+                        llm_role_config=role_cfg,
                     )
                 except LLMQuotaExhausted as e:
                     log('error', f'\n⚠️  API Key 额度已耗尽，扫描自动暂停！请充值后手动恢复。\n    原因: {e}')

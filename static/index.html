@@ -1842,20 +1842,24 @@ body.light .empty{
               <label style="font-size:12px">备注（可选）</label>
               <input id="newSched-poison-label" placeholder="如：每小时检测">
             </div>
-            <div class="form-group" style="margin:0;min-width:130px">
-              <label style="font-size:12px">AI 模型链</label>
-              <select id="newSched-poison-llm" multiple size="4" style="width:220px;height:auto">
-                <option value="">全局配置</option>
-              </select>
+            <div class="form-group" style="margin:0;min-width:220px">
+              <label style="font-size:12px">审计模型</label>
+              <select id="newSched-poison-audit-llm" multiple size="3" style="width:220px;height:auto"></select>
             </div>
-            <div class="form-group" style="margin:0;min-width:140px">
-              <label style="font-size:12px">复核策略</label>
-              <select id="newSched-poison-consensus" style="width:140px">
-                <option value="majority">多数通过</option>
-                <option value="all">全部确认</option>
-                <option value="any">任一命中</option>
-                <option value="single">仅首个模型</option>
-              </select>
+            <div class="form-group" style="margin:0;min-width:220px">
+              <label style="font-size:12px">检查模型</label>
+              <select id="newSched-poison-check-llm" multiple size="3" style="width:220px;height:auto"></select>
+            </div>
+            <div class="form-group" style="margin:0;min-width:220px">
+              <label style="font-size:12px">验证模型</label>
+              <select id="newSched-poison-verify-llm" multiple size="3" style="width:220px;height:auto"></select>
+            </div>
+            <div class="form-group" style="margin:0;min-width:180px">
+              <label style="font-size:12px">优化 skills</label>
+              <label style="display:flex;align-items:center;gap:8px;height:36px">
+                <input id="newSched-poison-optimize" type="checkbox">
+                <span style="font-size:12px;color:#666">按结果自动优化</span>
+              </label>
             </div>
             <div style="display:flex;gap:6px;padding-bottom:1px">
               <button class="btn btn-primary btn-sm" onclick="submitAddSchedule('poison')">确认添加</button>
@@ -1906,20 +1910,24 @@ body.light .empty{
               <label style="font-size:12px">备注（可选）</label>
               <input id="newSched-incremental_audit-label" placeholder="如：凌晨审计">
             </div>
-            <div class="form-group" style="margin:0;min-width:130px">
-              <label style="font-size:12px">AI 模型链</label>
-              <select id="newSched-incremental_audit-llm" multiple size="4" style="width:220px;height:auto">
-                <option value="">全局配置</option>
-              </select>
+            <div class="form-group" style="margin:0;min-width:220px">
+              <label style="font-size:12px">审计模型</label>
+              <select id="newSched-incremental_audit-audit-llm" multiple size="3" style="width:220px;height:auto"></select>
             </div>
-            <div class="form-group" style="margin:0;min-width:140px">
-              <label style="font-size:12px">复核策略</label>
-              <select id="newSched-incremental_audit-consensus" style="width:140px">
-                <option value="majority">多数通过</option>
-                <option value="all">全部确认</option>
-                <option value="any">任一命中</option>
-                <option value="single">仅首个模型</option>
-              </select>
+            <div class="form-group" style="margin:0;min-width:220px">
+              <label style="font-size:12px">检查模型</label>
+              <select id="newSched-incremental_audit-check-llm" multiple size="3" style="width:220px;height:auto"></select>
+            </div>
+            <div class="form-group" style="margin:0;min-width:220px">
+              <label style="font-size:12px">验证模型</label>
+              <select id="newSched-incremental_audit-verify-llm" multiple size="3" style="width:220px;height:auto"></select>
+            </div>
+            <div class="form-group" style="margin:0;min-width:180px">
+              <label style="font-size:12px">优化 skills</label>
+              <label style="display:flex;align-items:center;gap:8px;height:36px">
+                <input id="newSched-incremental_audit-optimize" type="checkbox">
+                <span style="font-size:12px;color:#666">按结果自动优化</span>
+              </label>
             </div>
             <div style="display:flex;gap:6px;padding-bottom:1px">
               <button class="btn btn-primary btn-sm" onclick="submitAddSchedule('incremental_audit')">确认添加</button>
@@ -1970,20 +1978,24 @@ body.light .empty{
               <label style="font-size:12px">备注（可选）</label>
               <input id="newSched-full_audit-label" placeholder="如：周六全量">
             </div>
-            <div class="form-group" style="margin:0;min-width:130px">
-              <label style="font-size:12px">AI 模型链</label>
-              <select id="newSched-full_audit-llm" multiple size="4" style="width:220px;height:auto">
-                <option value="">全局配置</option>
-              </select>
+            <div class="form-group" style="margin:0;min-width:220px">
+              <label style="font-size:12px">审计模型</label>
+              <select id="newSched-full_audit-audit-llm" multiple size="3" style="width:220px;height:auto"></select>
             </div>
-            <div class="form-group" style="margin:0;min-width:140px">
-              <label style="font-size:12px">复核策略</label>
-              <select id="newSched-full_audit-consensus" style="width:140px">
-                <option value="majority">多数通过</option>
-                <option value="all">全部确认</option>
-                <option value="any">任一命中</option>
-                <option value="single">仅首个模型</option>
-              </select>
+            <div class="form-group" style="margin:0;min-width:220px">
+              <label style="font-size:12px">检查模型</label>
+              <select id="newSched-full_audit-check-llm" multiple size="3" style="width:220px;height:auto"></select>
+            </div>
+            <div class="form-group" style="margin:0;min-width:220px">
+              <label style="font-size:12px">验证模型</label>
+              <select id="newSched-full_audit-verify-llm" multiple size="3" style="width:220px;height:auto"></select>
+            </div>
+            <div class="form-group" style="margin:0;min-width:180px">
+              <label style="font-size:12px">优化 skills</label>
+              <label style="display:flex;align-items:center;gap:8px;height:36px">
+                <input id="newSched-full_audit-optimize" type="checkbox">
+                <span style="font-size:12px;color:#666">按结果自动优化</span>
+              </label>
             </div>
             <div style="display:flex;gap:6px;padding-bottom:1px">
               <button class="btn btn-primary btn-sm" onclick="submitAddSchedule('full_audit')">确认添加</button>
@@ -2500,21 +2512,27 @@ body.light .empty{
       <div class="scan-modal-title" id="scanModalTitle"></div>
       <div class="scan-modal-desc" id="scanModalDesc"></div>
     </div>
-    <div class="form-group" style="margin-bottom:20px">
-      <label data-i18n="modal.selectAI">选择 AI 模型</label>
-      <select id="scanModalLlm" multiple size="5" style="width:100%;height:auto;min-height:120px">
-        <option value="" data-i18n="modal.globalAI">全局 AI 配置</option>
-      </select>
-      <div style="font-size:12px;color:#888;margin-top:6px">可多选：如 DeepSeek 初审，GPT 复核，Claude 验证。</div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>审计模型</label>
+      <select id="scanModalAuditLlm" multiple size="4" style="width:100%;height:auto;min-height:110px"></select>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>检查模型</label>
+      <select id="scanModalCheckLlm" multiple size="4" style="width:100%;height:auto;min-height:110px"></select>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>验证模型</label>
+      <select id="scanModalVerifyLlm" multiple size="4" style="width:100%;height:auto;min-height:110px"></select>
+      <div style="font-size:12px;color:#888;margin-top:6px">可以为每个角色选择一个或多个模型，按“审计 -> 检查 -> 验证”顺序联合去噪。</div>
     </div>
     <div class="form-group" style="margin-bottom:20px">
-      <label>交叉审计策略</label>
-      <select id="scanModalConsensus" style="width:100%">
-        <option value="majority">多数通过（推荐）</option>
-        <option value="all">全部确认</option>
-        <option value="any">任一命中</option>
-        <option value="single">仅首个模型</option>
-      </select>
+      <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#1a1a1a">
+        <label class="toggle">
+          <input type="checkbox" id="scanModalOptimizeSkills">
+          <span class="toggle-slider"></span>
+        </label>
+        根据审计结果优化对应 skills
+      </label>
     </div>
     <div class="form-group" style="margin-bottom:20px">
       <label>选择代码平台（可多选，留空=全部）</label>
@@ -2879,6 +2897,12 @@ function triggerScan(scanType) {
   document.getElementById('scanModalDesc').textContent  = isEn ? (m.descEn || '') : (m.descZh || '');
   const srcSel = document.getElementById('scanModalSources');
   if (srcSel) [...srcSel.options].forEach(o => { o.selected = false; });
+  ['scanModalAuditLlm','scanModalCheckLlm','scanModalVerifyLlm'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) [...el.options].forEach(o => { o.selected = false; });
+  });
+  const optimizeEl = document.getElementById('scanModalOptimizeSkills');
+  if (optimizeEl) optimizeEl.checked = false;
   loadScanModalSources();
   openModal('scanTriggerModal');
 }
@@ -2895,16 +2919,18 @@ async function doTriggerScan() {
   if (btn) btn.textContent = _lang === 'en' ? 'Scanning…' : '扫描中…';
   allBtns.forEach(b => { if (b) b.disabled = true; });
   try {
-    const llmProfileIds = getSelectedProfileIds('scanModalLlm');
+    const llmRoleConfig = getRoleConfig('scanModal');
+    const llmProfileIds = [...new Set([...(llmRoleConfig.audit||[]), ...(llmRoleConfig.check||[]), ...(llmRoleConfig.verify||[])])];
     const llmProfileId = llmProfileIds[0] || null;
-    const llmConsensusMode = document.getElementById('scanModalConsensus')?.value || 'single';
+    const optimizeSkills = !!document.getElementById('scanModalOptimizeSkills')?.checked;
     const srcSel = document.getElementById('scanModalSources');
     const selectedSources = srcSel ? [...srcSel.selectedOptions].map(o => o.value) : [];
     const res = await api('POST', '/api/scan/trigger', {
       scan_type: scanType,
       llm_profile_id: llmProfileId,
       llm_profile_ids: llmProfileIds,
-      llm_consensus_mode: llmConsensusMode,
+      llm_role_config: llmRoleConfig,
+      optimize_skills: optimizeSkills,
       selected_sources: selectedSources
     });
     toast(res.msg || (_lang === 'en' ? `${label} started` : `${label}已启动`));
@@ -3783,12 +3809,18 @@ function populateProfileSelects() {
     const model = p.model || 'default';
     return `<option value="${p.id}">${esc(p.name)} [${esc(provider)}/${esc(model)}]</option>`;
   }).join('');
-  ['scanModalLlm','newSched-poison-llm','newSched-incremental_audit-llm','newSched-full_audit-llm','iaLlm','iaUploadLlm','iaRepoLlm'].forEach(id => {
+  [
+    'scanModalAuditLlm','scanModalCheckLlm','scanModalVerifyLlm',
+    'newSched-poison-audit-llm','newSched-poison-check-llm','newSched-poison-verify-llm',
+    'newSched-incremental_audit-audit-llm','newSched-incremental_audit-check-llm','newSched-incremental_audit-verify-llm',
+    'newSched-full_audit-audit-llm','newSched-full_audit-check-llm','newSched-full_audit-verify-llm',
+    'iaLlm','iaUploadLlm','iaRepoLlm'
+  ].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const isMulti = el.multiple;
     const cur = isMulti ? [...el.selectedOptions].map(o => o.value) : el.value;
-    el.innerHTML = '<option value="">' + (_lang === 'en' ? 'Global Config' : '全局配置') + '</option>' + opts;
+    el.innerHTML = (isMulti ? '' : '<option value="">' + (_lang === 'en' ? 'Global Config' : '全局配置') + '</option>') + opts;
     if (isMulti) {
       [...el.options].forEach(opt => { opt.selected = Array.isArray(cur) && cur.includes(opt.value); });
     } else {
@@ -3809,6 +3841,32 @@ function getProfileChainSummary(ids, mode) {
   if (!chain.length) return '全局配置';
   const modeLabel = {single:'单模型', any:'任一命中', majority:'多数通过', all:'全部确认'}[mode || 'single'] || (mode || 'single');
   return `${chain.join(' + ')} / ${modeLabel}`;
+}
+
+function getRoleConfig(prefix) {
+  const audit = getSelectedProfileIds(`${prefix}AuditLlm`);
+  const check = getSelectedProfileIds(`${prefix}CheckLlm`);
+  const verify = getSelectedProfileIds(`${prefix}VerifyLlm`);
+  return {audit, check, verify};
+}
+
+function getRoleConfigForSchedule(type) {
+  return {
+    audit: getSelectedProfileIds(`newSched-${type}-audit-llm`),
+    check: getSelectedProfileIds(`newSched-${type}-check-llm`),
+    verify: getSelectedProfileIds(`newSched-${type}-verify-llm`)
+  };
+}
+
+function getRoleConfigSummary(roleConfig) {
+  const cfg = roleConfig || {};
+  const parts = [];
+  const labelMap = {audit:'审计', check:'检查', verify:'验证'};
+  for (const role of ['audit','check','verify']) {
+    const names = (cfg[role] || []).map(id => _llmProfiles.find(p => p.id === id)?.name).filter(Boolean);
+    if (names.length) parts.push(`${labelMap[role]}:${names.join(' + ')}`);
+  }
+  return parts.length ? parts.join(' | ') : '全局配置';
 }
 
 function showProfileForm() {
@@ -4368,7 +4426,7 @@ async function loadScheduleList() {
       </tr></thead>
       <tbody>${list.map(s => `<tr>
         <td style="font-family:monospace;font-size:14px;font-weight:700;color:#16a34a">${_schedTimeLabel(s)}</td>
-        <td style="color:#555;font-size:12px">${esc(getProfileChainSummary(s.llm_profile_ids || (s.llm_profile_id ? [s.llm_profile_id] : []), s.llm_consensus_mode || 'single'))}</td>
+        <td style="color:#555;font-size:12px">${esc(getRoleConfigSummary(s.llm_role_config || {audit:(s.llm_profile_ids || (s.llm_profile_id ? [s.llm_profile_id] : [])),check:[],verify:[]}))}${s.optimize_skills ? ' / 自动优化' : ''}</td>
         <td style="color:#888;font-size:13px">${esc(s.label||'')}</td>
         <td>
           <label class="toggle">
@@ -4444,8 +4502,9 @@ async function submitAddSchedule(type) {
     }
   }
 
-  const llmProfileIds = getSelectedProfileIds(`newSched-${type}-llm`);
-  const llmConsensusMode = document.getElementById(`newSched-${type}-consensus`)?.value || 'single';
+  const llmRoleConfig = getRoleConfigForSchedule(type);
+  const llmProfileIds = [...new Set([...(llmRoleConfig.audit||[]), ...(llmRoleConfig.check||[]), ...(llmRoleConfig.verify||[])])];
+  const optimizeSkills = !!document.getElementById(`newSched-${type}-optimize`)?.checked;
   const body = {
     type,
     hour,
@@ -4453,7 +4512,8 @@ async function submitAddSchedule(type) {
     label,
     llm_profile_id: llmProfileIds[0] || null,
     llm_profile_ids: llmProfileIds,
-    llm_consensus_mode: llmConsensusMode
+    llm_role_config: llmRoleConfig,
+    optimize_skills: optimizeSkills
   };
   if (weekday !== null) body.weekday = weekday;
   await api('POST', '/api/scan-schedules', body);

@@ -85,6 +85,8 @@ def init_db():
             llm_profile_id INTEGER DEFAULT NULL,
             llm_profile_ids TEXT DEFAULT '',
             llm_consensus_mode TEXT DEFAULT 'single',
+            llm_role_config TEXT DEFAULT '',
+            optimize_skills INTEGER DEFAULT 0,
             total_commits  INTEGER DEFAULT 0,
             total_findings INTEGER DEFAULT 0,
             critical_count INTEGER DEFAULT 0,
@@ -161,7 +163,9 @@ def init_db():
             label   TEXT    DEFAULT '',
             llm_profile_id INTEGER DEFAULT NULL,
             llm_profile_ids TEXT DEFAULT '',
-            llm_consensus_mode TEXT DEFAULT 'single'
+            llm_consensus_mode TEXT DEFAULT 'single',
+            llm_role_config TEXT DEFAULT '',
+            optimize_skills INTEGER DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS llm_profiles (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -253,6 +257,10 @@ def init_db():
             conn.execute("ALTER TABLE scan_schedules ADD COLUMN llm_profile_ids TEXT DEFAULT ''")
         if 'llm_consensus_mode' not in sched_cols:
             conn.execute("ALTER TABLE scan_schedules ADD COLUMN llm_consensus_mode TEXT DEFAULT 'single'")
+        if 'llm_role_config' not in sched_cols:
+            conn.execute("ALTER TABLE scan_schedules ADD COLUMN llm_role_config TEXT DEFAULT ''")
+        if 'optimize_skills' not in sched_cols:
+            conn.execute("ALTER TABLE scan_schedules ADD COLUMN optimize_skills INTEGER DEFAULT 0")
         # 迁移 scans 表
         scan_cols = [r['name'] for r in conn.execute("PRAGMA table_info(scans)").fetchall()]
         if 'llm_profile_id' not in scan_cols:
@@ -261,6 +269,10 @@ def init_db():
             conn.execute("ALTER TABLE scans ADD COLUMN llm_profile_ids TEXT DEFAULT ''")
         if 'llm_consensus_mode' not in scan_cols:
             conn.execute("ALTER TABLE scans ADD COLUMN llm_consensus_mode TEXT DEFAULT 'single'")
+        if 'llm_role_config' not in scan_cols:
+            conn.execute("ALTER TABLE scans ADD COLUMN llm_role_config TEXT DEFAULT ''")
+        if 'optimize_skills' not in scan_cols:
+            conn.execute("ALTER TABLE scans ADD COLUMN optimize_skills INTEGER DEFAULT 0")
         profile_cols = [r['name'] for r in conn.execute("PRAGMA table_info(llm_profiles)").fetchall()]
         if 'auto_optimize_skills' not in profile_cols:
             conn.execute("ALTER TABLE llm_profiles ADD COLUMN auto_optimize_skills INTEGER DEFAULT 0")
@@ -439,7 +451,8 @@ def set_app_config(key, value):
 
 # ── 扫描记录 ──────────────────────────────────────────────────────
 def create_scan(scan_type='incremental_audit', full_scan=False, llm_profile_id=None,
-                llm_profile_ids=None, llm_consensus_mode='single'):
+                llm_profile_ids=None, llm_consensus_mode='single',
+                llm_role_config=None, optimize_skills=False):
     # full_scan 为旧版兼容参数
     if full_scan and scan_type == 'incremental_audit':
         scan_type = 'full_audit'
@@ -447,10 +460,12 @@ def create_scan(scan_type='incremental_audit', full_scan=False, llm_profile_id=N
     if not profile_ids and llm_profile_id:
         profile_ids = [int(llm_profile_id)]
     profile_ids_json = json.dumps(profile_ids, ensure_ascii=False) if profile_ids else ''
+    role_cfg = _normalize_role_config(llm_role_config, profile_ids, llm_profile_id)
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO scans (started_at, status, scan_type, llm_profile_id, llm_profile_ids, llm_consensus_mode) "
-            "VALUES (?,?,?,?,?,?)",
+            "INSERT INTO scans "
+            "(started_at, status, scan_type, llm_profile_id, llm_profile_ids, llm_consensus_mode, llm_role_config, optimize_skills) "
+            "VALUES (?,?,?,?,?,?,?,?)",
             (
                 datetime.now().isoformat(),
                 'running',
@@ -458,6 +473,8 @@ def create_scan(scan_type='incremental_audit', full_scan=False, llm_profile_id=N
                 llm_profile_id,
                 profile_ids_json,
                 llm_consensus_mode or 'single',
+                json.dumps(role_cfg, ensure_ascii=False),
+                1 if optimize_skills else 0,
             )
         )
         conn.commit()
@@ -527,6 +544,12 @@ def get_scans(limit=50):
             row['llm_profile_ids'] = json.loads(row.get('llm_profile_ids') or '[]')
         except Exception:
             row['llm_profile_ids'] = []
+        row['llm_role_config'] = _normalize_role_config(
+            row.get('llm_role_config'),
+            row.get('llm_profile_ids'),
+            row.get('llm_profile_id'),
+        )
+        row['optimize_skills'] = bool(int(row.get('optimize_skills') or 0))
     return rows
 
 def get_scan(scan_id: int):
@@ -539,6 +562,12 @@ def get_scan(scan_id: int):
         item['llm_profile_ids'] = json.loads(item.get('llm_profile_ids') or '[]')
     except Exception:
         item['llm_profile_ids'] = []
+    item['llm_role_config'] = _normalize_role_config(
+        item.get('llm_role_config'),
+        item.get('llm_profile_ids'),
+        item.get('llm_profile_id'),
+    )
+    item['optimize_skills'] = bool(int(item.get('optimize_skills') or 0))
     return item
 
 
@@ -762,6 +791,44 @@ def _language_key(filename: str) -> str:
     base = os.path.basename((filename or '').strip()).lower()
     ext = os.path.splitext(base)[1].lower()
     return ext or base or '*'
+
+def _normalize_role_config(role_config, llm_profile_ids=None, llm_profile_id=None):
+    if isinstance(role_config, str):
+        try:
+            role_config = json.loads(role_config or '{}')
+        except Exception:
+            role_config = {}
+    role_config = role_config if isinstance(role_config, dict) else {}
+    out = {}
+    for role in ('audit', 'check', 'verify'):
+        vals = role_config.get(role) or []
+        norm = []
+        for raw in vals:
+            try:
+                val = int(raw)
+            except Exception:
+                continue
+            if val > 0 and val not in norm:
+                norm.append(val)
+        out[role] = norm
+    if any(out.values()):
+        return out
+    fallback = []
+    for raw in llm_profile_ids or []:
+        try:
+            val = int(raw)
+        except Exception:
+            continue
+        if val > 0 and val not in fallback:
+            fallback.append(val)
+    if not fallback and llm_profile_id:
+        try:
+            val = int(llm_profile_id)
+            if val > 0:
+                fallback.append(val)
+        except Exception:
+            pass
+    return {'audit': fallback, 'check': [], 'verify': []}
 
 def learn_adaptive_skills(scan_type: str, findings: list, skill_type: str = 'positive'):
     if not scan_type or not findings:
@@ -1143,14 +1210,14 @@ def get_scan_schedules(scan_type: str = None):
     with get_conn() as conn:
         if scan_type:
             rows = conn.execute(
-                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id,llm_profile_ids,llm_consensus_mode "
+                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id,llm_profile_ids,llm_consensus_mode,llm_role_config,optimize_skills "
                 "FROM scan_schedules "
                 "WHERE type=? ORDER BY hour,minute",
                 (scan_type,)
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id,llm_profile_ids,llm_consensus_mode "
+                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id,llm_profile_ids,llm_consensus_mode,llm_role_config,optimize_skills "
                 "FROM scan_schedules "
                 "ORDER BY type,hour,minute"
             ).fetchall()
@@ -1161,20 +1228,28 @@ def get_scan_schedules(scan_type: str = None):
                 item['llm_profile_ids'] = json.loads(item.get('llm_profile_ids') or '[]')
             except Exception:
                 item['llm_profile_ids'] = []
+            item['llm_role_config'] = _normalize_role_config(
+                item.get('llm_role_config'),
+                item.get('llm_profile_ids'),
+                item.get('llm_profile_id'),
+            )
+            item['optimize_skills'] = bool(int(item.get('optimize_skills') or 0))
             result.append(item)
         return result
 
 def add_scan_schedule(scan_type: str, hour: int, minute: int,
                       weekday=None, label: str = '', llm_profile_id=None,
-                      llm_profile_ids=None, llm_consensus_mode='single') -> int:
+                      llm_profile_ids=None, llm_consensus_mode='single',
+                      llm_role_config=None, optimize_skills=False) -> int:
     profile_ids = [int(x) for x in (llm_profile_ids or []) if str(x).strip()]
     if not profile_ids and llm_profile_id:
         profile_ids = [int(llm_profile_id)]
+    role_cfg = _normalize_role_config(llm_role_config, profile_ids, llm_profile_id)
     with get_conn() as conn:
         cur = conn.execute(
             "INSERT INTO scan_schedules "
-            "(type,hour,minute,weekday,enabled,label,llm_profile_id,llm_profile_ids,llm_consensus_mode) "
-            "VALUES (?,?,?,?,1,?,?,?,?)",
+            "(type,hour,minute,weekday,enabled,label,llm_profile_id,llm_profile_ids,llm_consensus_mode,llm_role_config,optimize_skills) "
+            "VALUES (?,?,?,?,1,?,?,?,?,?,?)",
             (
                 scan_type,
                 hour,
@@ -1184,6 +1259,8 @@ def add_scan_schedule(scan_type: str, hour: int, minute: int,
                 llm_profile_id,
                 json.dumps(profile_ids, ensure_ascii=False) if profile_ids else '',
                 llm_consensus_mode or 'single',
+                json.dumps(role_cfg, ensure_ascii=False),
+                1 if optimize_skills else 0,
             )
         )
         conn.commit()

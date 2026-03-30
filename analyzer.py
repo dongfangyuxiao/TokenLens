@@ -96,9 +96,12 @@ def _make_fingerprint(repo, filename, title, line=''):
     return hashlib.md5(src.encode()).hexdigest()
 
 def _profile_label(llm_cfg: dict) -> str:
+    role = (llm_cfg or {}).get('__role', '').strip()
+    role_label = {'audit': '审计', 'check': '检查', 'verify': '验证'}.get(role, role)
     provider = (llm_cfg or {}).get('provider', '').strip() or 'unknown'
     model = (llm_cfg or {}).get('model', '').strip()
-    return f'{provider}/{model}' if model else provider
+    base = f'{provider}/{model}' if model else provider
+    return f'{role_label}:{base}' if role_label else base
 
 def _build_adaptive_skill_text(scan_type: str, filename: str) -> str:
     positive_hints = db.get_adaptive_skill_hints(scan_type, filename, skill_type='positive', limit=6)
@@ -207,27 +210,36 @@ def _merge_model_results(model_results: list[dict], consensus_mode: str = 'singl
             summaries.append(f'[{label}] {summary}')
         for finding in item.get('findings', []):
             key = _normalize_finding_key(finding.get('filename', ''), finding)
-            bucket = buckets.setdefault(key, {'votes': [], 'findings': []})
+            bucket = buckets.setdefault(key, {'votes': [], 'findings': [], 'role_votes': {'audit': [], 'check': [], 'verify': []}})
             bucket['votes'].append(label)
             bucket['findings'].append(finding)
+            role = item.get('role', '') or 'audit'
+            bucket['role_votes'].setdefault(role, []).append(label)
 
-    total_models = len(model_results)
-    if consensus_mode == 'all':
-        threshold = total_models
-    elif consensus_mode == 'any':
-        threshold = 1
-    else:
-        threshold = max(2, (total_models // 2) + 1) if total_models > 1 else 1
+    stage_order = [role for role in ('audit', 'check', 'verify')
+                   if any((item.get('role', '') or 'audit') == role for item in model_results)]
+    if not stage_order:
+        stage_order = ['audit']
 
     merged = []
     rejected = []
     for bucket in buckets.values():
         votes = bucket['votes']
         unique_votes = len(set(votes))
-        if unique_votes < threshold:
+        role_votes = bucket.get('role_votes', {})
+        baseline_role = stage_order[0]
+        if not role_votes.get(baseline_role):
+            continue
+        missing_stage = None
+        for role in stage_order[1:]:
+            if not role_votes.get(role):
+                missing_stage = role
+                break
+        if missing_stage:
             base = dict(bucket['findings'][0])
             base['reviewed_by'] = votes
             base['review_count'] = unique_votes
+            base['rejected_stage'] = missing_stage
             rejected.append(base)
             continue
         findings = bucket['findings']
@@ -238,10 +250,8 @@ def _merge_model_results(model_results: list[dict], consensus_mode: str = 'singl
         merged.append(base)
 
     summary = ' | '.join(summaries[:3])
-    if consensus_mode != 'single':
-        summary = f'Consensus={consensus_mode}; kept {len(merged)} findings from {total_models} models.' + (
-            f' {summary}' if summary else ''
-        )
+    if len(stage_order) > 1:
+        summary = f'Pipeline={"+".join(stage_order)}; kept {len(merged)} findings.' + (f' {summary}' if summary else '')
     return merged, summary, rejected
 
 _SCAN_TYPE_INSTRUCTION = {
@@ -311,6 +321,7 @@ def _analyze_single_file_multi(filename, patch, commit_message, llm_cfgs, prompt
         )
         model_results.append({
             'label': _profile_label(llm_cfg),
+            'role': llm_cfg.get('__role', 'audit'),
             'findings': findings,
             'summary': summary,
         })
@@ -436,6 +447,7 @@ def _analyze_cross_file_multi(files_data, commit_message, llm_cfgs, scan_type='f
         findings = _analyze_cross_file(files_data, commit_message, call_fn, scan_type)
         model_results.append({
             'label': _profile_label(llm_cfg),
+            'role': llm_cfg.get('__role', 'audit'),
             'findings': findings,
             'summary': '',
         })
@@ -449,7 +461,8 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
                    opensca_token='', semgrep_token='',
                    added_only=False, scan_type='full_audit',
                    stop_event=None, llm_cfgs=None,
-                   llm_consensus_mode='single', auto_optimize_skills=False):
+                   llm_consensus_mode='single', auto_optimize_skills=False,
+                   llm_role_config=None):
     """
     分析一次提交，返回 findings 列表（每条附带 fingerprint）。
 
@@ -566,12 +579,13 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
             except Exception as e:
                 print(f'    [analyzer] {filename} opensca 失败: {e}')
 
-    if auto_optimize_skills and len(effective_llm_cfgs) > 1 and llm_consensus_mode != 'single' and all_findings:
+    active_roles = {cfg.get('__role', 'audit') for cfg in effective_llm_cfgs}
+    if auto_optimize_skills and len(effective_llm_cfgs) > 1 and len(active_roles) >= 1 and all_findings:
         try:
             db.learn_adaptive_skills(scan_type, all_findings)
         except Exception as e:
             print(f'    [analyzer] adaptive skill 学习失败: {e}')
-    if auto_optimize_skills and len(effective_llm_cfgs) > 1 and llm_consensus_mode in {'majority', 'all'} and rejected_findings:
+    if auto_optimize_skills and len(effective_llm_cfgs) > 1 and len(active_roles) >= 2 and rejected_findings:
         try:
             db.learn_adaptive_skills(scan_type, rejected_findings, skill_type='negative')
         except Exception as e:

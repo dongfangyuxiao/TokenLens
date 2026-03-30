@@ -246,7 +246,8 @@ def _require_license_if_enabled(feature: str = ''):
     return status
 
 def _run_in_thread(scan_type: str, llm_profile_id=None, llm_profile_ids=None,
-                   llm_consensus_mode='single'):
+                   llm_consensus_mode='single', llm_role_config=None,
+                   optimize_skills=False):
     """在新线程中执行扫描，持有 _scan_lock。"""
     if not _scan_lock.acquire(blocking=False):
         print('[scheduler] 上次扫描未结束，跳过')
@@ -260,6 +261,8 @@ def _run_in_thread(scan_type: str, llm_profile_id=None, llm_profile_ids=None,
                  llm_profile_id=llm_profile_id,
                  llm_profile_ids=llm_profile_ids,
                  llm_consensus_mode=llm_consensus_mode,
+                 llm_role_config=llm_role_config,
+                 optimize_skills=optimize_skills,
                  progress_cb=_set_scan_progress)
     finally:
         _scan_lock.release()
@@ -296,18 +299,37 @@ def _normalize_consensus_mode(mode: str, profile_ids: list[int]):
         return 'single'
     return m if m in _VALID_CONSENSUS_MODES else 'majority'
 
+def _collect_role_profile_ids(role_cfg: dict):
+    ids = []
+    for role in ('audit', 'check', 'verify'):
+        for raw in (role_cfg or {}).get(role, []) or []:
+            try:
+                val = int(raw)
+            except Exception:
+                continue
+            if val > 0 and val not in ids:
+                ids.append(val)
+    return ids
+
 def _scan_kwargs_from_target(target: dict):
     profile_ids = _normalize_profile_ids(
         target.get('llm_profile_ids') or [],
         target.get('llm_profile_id')
     )
+    role_cfg = db._normalize_role_config(
+        target.get('llm_role_config'),
+        profile_ids,
+        target.get('llm_profile_id'),
+    )
     return {
         'llm_profile_id': profile_ids[0] if profile_ids else target.get('llm_profile_id'),
         'llm_profile_ids': profile_ids,
+        'llm_role_config': role_cfg,
         'llm_consensus_mode': _normalize_consensus_mode(
             target.get('llm_consensus_mode', 'single'),
             profile_ids,
         ),
+        'optimize_skills': str(target.get('optimize_skills', '0')).strip() in {'1', 'true', 'True'} if isinstance(target.get('optimize_skills'), str) else bool(target.get('optimize_skills', False)),
     }
 
 def _reschedule():
@@ -327,6 +349,8 @@ def _reschedule():
             cfg.get('llm_profile_id'),
             cfg.get('llm_profile_ids'),
             cfg.get('llm_consensus_mode', 'single'),
+            cfg.get('llm_role_config'),
+            cfg.get('optimize_skills', False),
         )
         if h == -1:
             scheduler.add_job(fn, 'cron', hour='*', minute=m, id=f"sched_{s['id']}")
@@ -780,6 +804,8 @@ class ScanScheduleIn(BaseModel):
     llm_profile_id    : int = None
     llm_profile_ids   : List[int] = []
     llm_consensus_mode: str = 'single'
+    llm_role_config   : dict = {}
+    optimize_skills   : bool = False
 
 @app.get('/api/scan-schedules')
 def list_scan_schedules(_: str = Depends(require_auth)):
@@ -796,11 +822,15 @@ def add_scan_schedule(body: ScanScheduleIn, _: str = Depends(require_auth)):
     if body.weekday is not None and not (0 <= body.weekday <= 6):
         raise HTTPException(400, '星期必须在 0-6 之间')
     profile_ids = _normalize_profile_ids(body.llm_profile_ids, body.llm_profile_id)
+    role_cfg = db._normalize_role_config(body.llm_role_config, profile_ids, body.llm_profile_id)
+    role_profile_ids = _collect_role_profile_ids(role_cfg)
+    if role_profile_ids:
+        profile_ids = role_profile_ids
     consensus_mode = _normalize_consensus_mode(body.llm_consensus_mode, profile_ids)
     sid = db.add_scan_schedule(body.type, body.hour, body.minute,
                                body.weekday, body.label.strip(),
                                profile_ids[0] if profile_ids else body.llm_profile_id,
-                               profile_ids, consensus_mode)
+                               profile_ids, consensus_mode, role_cfg, body.optimize_skills)
     _reschedule()
     return {'ok': True, 'id': sid}
 
@@ -828,6 +858,8 @@ class ScanTrigger(BaseModel):
     llm_profile_id     : int  = None
     llm_profile_ids    : List[int] = []
     llm_consensus_mode : str = 'single'
+    llm_role_config    : dict = {}
+    optimize_skills    : bool = False
     selected_sources   : List[str] = []
     # 旧版兼容
     full_scan          : bool = False
@@ -849,6 +881,10 @@ def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(requ
     label = _SCAN_TYPE_LABELS[scan_type]
     syslog.send('info', 'SCAN', f'{label}由 {operator} 触发')
     profile_ids = _normalize_profile_ids(body.llm_profile_ids, body.llm_profile_id)
+    role_cfg = db._normalize_role_config(body.llm_role_config, profile_ids, body.llm_profile_id)
+    role_profile_ids = _collect_role_profile_ids(role_cfg)
+    if role_profile_ids:
+        profile_ids = role_profile_ids
     llm_profile_id = profile_ids[0] if profile_ids else body.llm_profile_id
     llm_consensus_mode = _normalize_consensus_mode(body.llm_consensus_mode, profile_ids)
     selected_sources = body.selected_sources or []
@@ -859,6 +895,8 @@ def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(requ
                      manual=True, llm_profile_id=llm_profile_id,
                      llm_profile_ids=profile_ids,
                      llm_consensus_mode=llm_consensus_mode,
+                     llm_role_config=role_cfg,
+                     optimize_skills=body.optimize_skills,
                      selected_sources=selected_sources,
                      progress_cb=_set_scan_progress)
         finally:
@@ -950,6 +988,8 @@ def rerun_scan(scan_id: int, operator: str = Depends(require_auth)):
                      llm_profile_id=scan_cfg.get('llm_profile_id'),
                      llm_profile_ids=scan_cfg.get('llm_profile_ids'),
                      llm_consensus_mode=scan_cfg.get('llm_consensus_mode', 'single'),
+                     llm_role_config=scan_cfg.get('llm_role_config'),
+                     optimize_skills=scan_cfg.get('optimize_skills', False),
                      progress_cb=_set_scan_progress)
         finally:
             _scan_lock.release()

@@ -5,11 +5,11 @@
 ### 📌 今日同步摘要
 
 - 新增多模型交叉审计链：手动触发、计划任务、历史重跑均支持 `llm_profile_ids`
-- 新增四种复核策略：`single / any / majority / all`
+- 交叉审计 UI 改为 `审计模型 / 检查模型 / 验证模型` 三段式展示和选择
 - `analyzer.py` 支持多模型逐文件复核与跨文件复核，并按共识策略合并审计结果
 - 新增 adaptive skills 自学习：多模型共识确认的结果会按语言和任务沉淀，并在后续 prompt 中自动增强
 - 新增负向 adaptive skills：`majority / all` 下被多数模型否决的低可信模式也会沉淀，用于后续自动压制误报
-- AI 配置表单新增“启用多模型联合校验后自动优化 skills”勾选项，开启后该模型参与联合校验时会自动调整 skills
+- 扫描弹窗与计划任务新增“根据审计结果优化对应 skills”开关，开启后按三阶段结果自动优化已有 skills
 - `scan_schedules` 与 `scans` 表新增 `llm_profile_ids`、`llm_consensus_mode` 字段，保留旧版 `llm_profile_id` 兼容
 - 新增 `adaptive_skills` 表与 `/api/adaptive-skills` 接口，用于查看自动优化后的 skills
 - 系统内置新增 `Java / PHP / Python / Go / Node.js / C# / Ruby / Rust / C/C++` 等常见语言专项 skills / prompts
