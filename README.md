@@ -1,8 +1,8 @@
-# 春静企业代码安全平台
+# 探云令安全平台
 
 ## 项目简介
 
-春静企业代码安全平台是一款面向企业研发团队的**自动化代码安全审计平台**。通过接入大语言模型（LLM），结合 Semgrep 静态分析与 OpenSCA 软件成分分析，对代码仓库的每一次提交进行安全审计，实时发现注入、认证绕过、供应链投毒等高危风险，并通过钉钉、飞书、企业微信、邮件等渠道即时告警。
+探云令安全平台是一款面向企业研发团队的**自动化代码安全审计平台**。通过接入大语言模型（LLM），结合 Semgrep 静态分析与 OpenSCA 软件成分分析，对代码仓库的每一次提交进行安全审计，实时发现注入、认证绕过、供应链投毒等高危风险，并通过钉钉、飞书、企业微信、邮件等渠道即时告警。
 
 ## 最近更新
 
@@ -235,24 +235,13 @@ pre-commit run --all-files
 
 当前版本已内置基于 **机器码 + 授权文件** 的授权机制，但默认 **不启用拦截**。  
 代码审计系统仅保留客户侧授权动作：查看机器码、下载机器码文件、导入授权文件、开启本地授权校验。  
-授权签发与授权台账已拆分为独立系统，需单独启动授权管理服务。
-
-### 服务拆分
-
-- 代码审计系统：`uvicorn app:app --host 0.0.0.0 --port 8000`
-- 授权管理系统：`uvicorn license_admin_app:app --host 0.0.0.0 --port 8001`
-
-建议部署方式：
-- 客户使用 `http://审计系统地址:8000`
-- 内部授权人员使用 `http://授权管理地址:8001`
-- 两个系统可共用同一个数据库文件，用于共享授权记录与管理员账号
+授权签发与授权台账已拆分为独立内部系统，不包含在当前客户交付仓库中。
 
 ### 生产部署示例
 
 仓库已提供可直接改造的部署样例：
 
 - `deploy/systemd/springstillness-audit.service`
-- `deploy/systemd/springstillness-license-admin.service`
 - `deploy/nginx/springstillness.conf`
 
 推荐部署步骤：
@@ -260,8 +249,9 @@ pre-commit run --all-files
 1. 将项目放到 `/opt/springstillness`
 2. 按实际域名修改 `deploy/nginx/springstillness.conf`
 3. 先生成 Ed25519 公私钥
-4. 按实际路径和环境变量修改两个 `systemd` service 文件
-5. 启动两个服务
+4. 将公钥放到客户侧代码审计系统
+5. 按实际路径和环境变量修改 `systemd` service 文件
+6. 启动代码审计系统
 
 ```bash
 mkdir -p /opt/springstillness/keys
@@ -272,19 +262,17 @@ python3 license_manager.py generate-keypair \
 
 其中：
 
-- `license_private.pem` 只放在授权管理系统所在机器
-- `license_public.pem` 放到代码审计系统所在机器
+- `license_private.pem` 只放在公司内部授权管理系统
+- `license_public.pem` 放到客户侧代码审计系统
 - 私钥不要下发到代码审计系统
 
 ```bash
 sudo cp deploy/systemd/springstillness-audit.service /etc/systemd/system/
-sudo cp deploy/systemd/springstillness-license-admin.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now springstillness-audit
-sudo systemctl enable --now springstillness-license-admin
 ```
 
-6. 加载 Nginx 配置
+7. 加载 Nginx 配置
 
 ```bash
 sudo cp deploy/nginx/springstillness.conf /etc/nginx/conf.d/
@@ -292,15 +280,9 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-### 在独立授权管理系统中生成授权文件
+### 生成授权文件
 
-先准备授权私钥：
-
-```bash
-export LICENSE_PRIVATE_KEY_PATH=./keys/license_private.pem
-```
-
-先在目标部署机器的 **系统设置 → 产品授权** 下载机器码文件，或复制机器码，然后在授权管理系统或签发环境执行：
+先在目标部署机器的 **系统设置 → 产品授权** 下载机器码文件，或复制机器码，然后在公司内部授权系统或签发环境执行：
 
 ```bash
 python3 license_manager.py generate-file \
@@ -318,21 +300,6 @@ python3 license_manager.py generate-file \
 
 可重复追加 `--feature` 写入功能点，例如 `--feature full_audit --feature instant_analysis`。  
 若不传 `--feature`，则默认表示授权不限制功能点。
-
-### 独立授权后台管理
-
-独立授权管理系统不只支持生成授权文件，还支持：
-
-- 查看已签发授权台账
-- 按客户名 / 机器码 / 备注检索
-- 查看生效、吊销、过期统计
-- 记录签发人、签发时间、下载次数
-- 修改备注
-- 吊销 / 恢复后台记录
-- 重新下载历史授权文件
-- 删除不再需要的后台记录
-
-说明：吊销仅影响后台台账和后续分发管理；已经离线导入客户环境的授权文件不会被远程追溯失效。
 
 ### 校验授权文件
 

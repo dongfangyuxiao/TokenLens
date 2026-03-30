@@ -1,4 +1,4 @@
-# 春静企业代码安全平台 — 产品技术文档
+# 探云令安全平台 — 产品技术文档
 
 **版本**：v2.2
 **更新日期**：2026-03-27
@@ -30,7 +30,7 @@
 
 ## 1. 产品概述
 
-春静企业代码安全平台是面向企业研发团队的**自动化代码安全审计系统**，通过接入大语言模型（LLM）并整合 Semgrep 静态分析与 OpenSCA 软件成分分析，对多个代码托管平台的每次提交进行安全审计，实时发现注入漏洞、认证缺陷、供应链投毒等高危风险，并通过多渠道即时告警。
+探云令安全平台是面向企业研发团队的**自动化代码安全审计系统**，通过接入大语言模型（LLM）并整合 Semgrep 静态分析与 OpenSCA 软件成分分析，对多个代码托管平台的每次提交进行安全审计，实时发现注入漏洞、认证缺陷、供应链投毒等高危风险，并通过多渠道即时告警。
 
 **核心设计原则**
 
@@ -92,7 +92,6 @@ SpringStillness/
 ├── analyzer.py             # LLM / Semgrep / OpenSCA 分析引擎
 ├── database.py             # SQLite 数据访问层，DDL 与所有 CRUD
 ├── license_manager.py      # 产品授权签发 / 校验工具
-├── license_admin_app.py    # 独立授权管理系统
 ├── deploy/                 # systemd / nginx 部署样例
 ├── repo_sync.py            # 全量扫描代码快照同步 + 跨仓库关键词检索
 ├── reporter.py             # 报告生成（Markdown / JSON / HTML）
@@ -791,7 +790,7 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 
 **新增**
 - 授权前端主流程重构为“机器码展示 + 授权文件导入”，客户侧无需再手工粘贴授权文件令牌
-- 新增独立授权管理系统 `license_admin_app.py`，授权管理端支持按客户机器码生成授权文件并下载
+- 授权签发与授权台账已拆分到公司内部独立系统，不随客户侧仓库交付
 - `GET /api/license-status` 返回 `machine_code` 字段，机器码文件导出同步写入 `machine_code`
 - 新增 `license_records` 授权台账表，支持历史授权查询、备注、吊销/恢复、重下载和删除
 
@@ -867,16 +866,3 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 - Syslog 转发
 - 漏洞白名单与状态管理
 - 即时检测（代码粘贴 / ZIP 上传）
-### 独立授权管理系统 `license_admin_app.py`
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/login` | 登录授权管理系统 |
-| POST | `/api/logout` | 退出授权管理系统 |
-| GET | `/api/me` | 获取当前登录用户 |
-| POST | `/api/license/generate-file` | 按机器码生成授权文件并下载 |
-| GET | `/api/license-records` | 查询授权台账列表 |
-| GET | `/api/license-records/summary` | 查询授权台账统计 |
-| GET | `/api/license-records/{id}/download` | 重新下载历史授权文件 |
-| PATCH | `/api/license-records/{id}` | 更新授权台账状态或备注 |
-| DELETE | `/api/license-records/{id}` | 删除授权台账记录 |

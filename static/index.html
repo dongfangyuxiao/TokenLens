@@ -3,34 +3,34 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>春静企业代码安全平台</title>
+<title>探云令安全平台</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;
-  background:#f0fdf4;color:#1a1a1a;display:flex;height:100vh;overflow:hidden;
-  background-image:radial-gradient(circle,rgba(74,222,128,.06) 1px,transparent 1px);
+  background:#eef6ff;color:#1a1a1a;display:flex;height:100vh;overflow:hidden;
+  background-image:radial-gradient(circle,rgba(59,130,246,.06) 1px,transparent 1px);
   background-size:28px 28px}
 /* 侧边栏 */
 .sidebar{width:230px;
-  background:linear-gradient(180deg,#0f2818 0%,#132d1f 60%,#0a1d12 100%);
+  background:linear-gradient(180deg,#091725 0%,#0c2033 60%,#09131f 100%);
   display:flex;flex-direction:column;flex-shrink:0;
-  border-right:1px solid rgba(34,197,94,.15)}
+  border-right:1px solid rgba(56,189,248,.15)}
 nav{flex:1;padding:8px 0;overflow-y:auto}
 .nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px;
-  color:rgba(134,239,172,.55);cursor:pointer;font-size:13px;transition:.2s;
+  color:rgba(186,230,253,.62);cursor:pointer;font-size:13px;transition:.2s;
   border-left:2px solid transparent;position:relative}
-.nav-item:hover{color:rgba(187,247,208,.9);background:rgba(34,197,94,.07);
-  border-left-color:rgba(74,222,128,.3)}
-.nav-item.active{color:#4ade80;background:rgba(34,197,94,.13);border-left-color:#4ade80}
+.nav-item:hover{color:rgba(224,242,254,.92);background:rgba(56,189,248,.08);
+  border-left-color:rgba(56,189,248,.32)}
+.nav-item.active{color:#7dd3fc;background:rgba(56,189,248,.14);border-left-color:#38bdf8}
 .nav-item.active::after{content:'';position:absolute;right:0;top:20%;bottom:20%;
-  width:2px;background:#4ade80;border-radius:2px;opacity:.5}
+  width:2px;background:#38bdf8;border-radius:2px;opacity:.5}
 .nav-item .icon{font-size:15px;width:20px;text-align:center}
 /* 主内容 */
 .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .topbar{background:#fff;padding:0 24px;height:54px;display:flex;align-items:center;
-  justify-content:space-between;border-bottom:1px solid #dcfce7;flex-shrink:0;
-  box-shadow:0 1px 8px rgba(0,80,30,.06)}
-.page-title{font-size:15px;font-weight:700;color:#14532d;letter-spacing:.03em}
+  justify-content:space-between;border-bottom:1px solid #dbeafe;flex-shrink:0;
+  box-shadow:0 1px 8px rgba(37,99,235,.06)}
+.page-title{font-size:15px;font-weight:700;color:#0f3b68;letter-spacing:.03em}
 .topbar-right{display:flex;align-items:center;gap:12px}
 .license-badge{display:inline-flex;align-items:center;gap:8px;min-height:34px;padding:0 12px;border-radius:999px;
   font-size:12px;font-weight:700;letter-spacing:.02em;color:#0f172a;background:rgba(148,163,184,.12);
@@ -54,7 +54,7 @@ nav{flex:1;padding:8px 0;overflow-y:auto}
 .btn{padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;
   cursor:pointer;transition:.15s}
 .btn:active{opacity:.8}
-.btn-primary{background:#16a34a;color:#fff}
+.btn-primary{background:#0284c7;color:#fff}
 .btn-danger{background:#ff4d4f;color:#fff}
 .btn-default{background:#fff;color:#555;border:1px solid #d9d9d9}
 .btn-sm{padding:5px 12px;font-size:12px}
@@ -80,14 +80,14 @@ label{font-size:12px;color:#888;font-weight:600}
 input,select,textarea{border:1px solid #e8e8e8;border-radius:8px;padding:9px 12px;
   font-size:13px;color:#1a1a1a;outline:none;font-family:inherit;
   transition:border-color .2s;width:100%}
-input:focus,select:focus,textarea:focus{border-color:#16a34a}
+input:focus,select:focus,textarea:focus{border-color:#0ea5e9}
 textarea{resize:vertical;min-height:80px}
 /* 统计卡片 */
 .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
 .stat-card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .stat-num{font-size:28px;font-weight:800;line-height:1}
 .stat-label{font-size:12px;color:#888;margin-top:6px}
-.stat-card.total .stat-num{color:#16a34a}
+.stat-card.total .stat-num{color:#0284c7}
 .stat-card.critical .stat-num{color:#ff4d4f}
 .stat-card.high .stat-num{color:#fa8c16}
 .stat-card.medium .stat-num{color:#d4b106}
@@ -98,7 +98,7 @@ textarea{resize:vertical;min-height:80px}
 .badge-medium{background:#feffe6;color:#d4b106}
 .badge-low{background:#f6ffed;color:#52c41a}
 .badge-done{background:#f6ffed;color:#52c41a}
-.badge-running{background:#dcfce7;color:#16a34a}
+.badge-running{background:#e0f2fe;color:#0284c7}
 .badge-error{background:#fff1f0;color:#ff4d4f}
 .badge-stopped{background:#f5f5f5;color:#888}
 .badge-paused{background:#fff7e6;color:#d46b08}
@@ -260,22 +260,21 @@ body.dark .btn-icon:hover{background:#2d3748}
 /* ── 登录页 ── */
 #login-page{display:none;position:fixed;inset:0;z-index:999;
   align-items:center;justify-content:center;overflow:hidden;
-  background:linear-gradient(145deg,#fce7f3 0%,#fff7ed 45%,#ecfdf5 100%)}
+  background:linear-gradient(145deg,#06111f 0%,#0a1730 48%,#11264a 100%)}
 #login-page.show{display:flex}
 
-/* ── 春意背景文字 ── */
+/* ── 品牌背景文字 ── */
 #login-page .login-bg-text{
   position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden}
-/* 竖排对联，分列登录框两侧 */
 #login-page .login-bg-text span{
   position:absolute;top:50%;
   writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;
   font-size:clamp(36px,5vw,80px);font-weight:900;letter-spacing:.25em;
   line-height:1;user-select:none;
   font-family:'PingFang SC','Noto Serif SC','Hiragino Serif','Source Han Serif','Microsoft YaHei',serif;
-  background:linear-gradient(180deg,#f9a8d4 0%,#fb923c 45%,#4ade80 100%);
+  background:linear-gradient(180deg,#d8f5ff 0%,#67d9ff 48%,#5b8cff 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-  filter:drop-shadow(0 2px 20px rgba(249,168,212,.45)) drop-shadow(0 0 32px rgba(251,146,60,.2))}
+  filter:drop-shadow(0 2px 20px rgba(103,217,255,.32)) drop-shadow(0 0 32px rgba(91,140,255,.18))}
 #login-page .login-bg-text span:first-child{
   left:6vw;transform:translateY(-50%);
   animation:spring-float1 7s ease-in-out infinite}
@@ -289,25 +288,23 @@ body.dark .btn-icon:hover{background:#2d3748}
   0%,100%{opacity:.40;transform:translateY(-50%) translateX(0)}
   50%{opacity:.55;transform:translateY(-50%) translateX(7px)}}
 
-/* 樱花瓣纹底纹 */
 #login-page::before{content:'';position:absolute;inset:0;z-index:0;
   background-image:
-    radial-gradient(circle,rgba(249,168,212,.12) 1px,transparent 1px),
-    radial-gradient(circle,rgba(251,146,60,.07) 1px,transparent 1px);
+    radial-gradient(circle,rgba(125,211,252,.12) 1px,transparent 1px),
+    radial-gradient(circle,rgba(79,109,255,.08) 1px,transparent 1px);
   background-size:32px 32px,56px 56px;
   background-position:0 0,16px 16px}
 
 /* 扫描线 */
 #login-page::after{content:'';position:absolute;left:0;right:0;height:2px;z-index:0;
-  background:linear-gradient(90deg,transparent,rgba(249,168,212,.5),rgba(251,146,60,.3),transparent);
+  background:linear-gradient(90deg,transparent,rgba(125,211,252,.56),rgba(79,109,255,.36),transparent);
   animation:scanline 8s linear infinite;top:-2px;opacity:.6}
 @keyframes scanline{0%{top:-2px}100%{top:100%}}
 
-/* 角落光晕 —— 春色 */
 .login-glow{position:absolute;border-radius:50%;pointer-events:none;z-index:0;filter:blur(80px)}
-.login-glow-a{width:480px;height:480px;background:rgba(249,168,212,.22);top:-120px;right:-100px}
-.login-glow-b{width:340px;height:340px;background:rgba(251,191,36,.14);bottom:-80px;left:-60px}
-.login-glow-c{width:260px;height:260px;background:rgba(134,239,172,.12);top:25%;left:-70px}
+.login-glow-a{width:480px;height:480px;background:rgba(125,211,252,.16);top:-120px;right:-100px}
+.login-glow-b{width:340px;height:340px;background:rgba(96,165,250,.12);bottom:-80px;left:-60px}
+.login-glow-c{width:260px;height:260px;background:rgba(79,109,255,.1);top:25%;left:-70px}
 
 /* ── 飘落花瓣 ── */
 .petal{position:absolute;pointer-events:none;z-index:0;opacity:0;
@@ -323,15 +320,15 @@ body.dark .btn-icon:hover{background:#2d3748}
 
 /* 登录卡片 */
 .login-box{position:relative;z-index:1;
-  background:rgba(255,255,255,.82);
-  border:1px solid rgba(249,168,212,.35);
+  background:rgba(8,17,31,.82);
+  border:1px solid rgba(125,211,252,.24);
   border-radius:20px;padding:44px 40px;width:400px;
   backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
-  box-shadow:0 0 0 1px rgba(249,168,212,.12),0 8px 40px rgba(219,112,147,.12),0 24px 64px rgba(180,80,100,.08)}
+  box-shadow:0 0 0 1px rgba(125,211,252,.08),0 8px 40px rgba(37,99,235,.12),0 24px 64px rgba(2,8,23,.24)}
 
 /* 顶部花瓣渐变装饰线 */
 .login-box::before{content:'';position:absolute;top:0;left:12%;right:12%;height:2px;
-  background:linear-gradient(90deg,transparent,rgba(249,168,212,.8),rgba(251,146,60,.5),transparent);
+  background:linear-gradient(90deg,transparent,rgba(125,211,252,.8),rgba(79,109,255,.5),transparent);
   border-radius:2px}
 
 .login-logo{text-align:center;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:12px}
@@ -339,23 +336,23 @@ body.dark .btn-icon:hover{background:#2d3748}
   background:linear-gradient(135deg,#db2777 0%,#ea580c 50%,#16a34a 100%);
   -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
   letter-spacing:.04em}
-.login-sub{text-align:center;font-size:12px;color:rgba(120,80,100,.55);
+.login-sub{text-align:center;font-size:12px;color:rgba(170,215,245,.62);
   margin-bottom:30px;letter-spacing:.1em}
 .login-box .form-group{margin-bottom:18px}
-.login-box label{font-size:12px;color:rgba(100,60,80,.7);font-weight:600;
+.login-box label{font-size:12px;color:rgba(191,232,255,.72);font-weight:600;
   display:block;margin-bottom:7px;letter-spacing:.05em}
-.login-box input{width:100%;background:rgba(255,255,255,.7);border:1px solid rgba(249,168,212,.4);
-  color:#3d1a2e;border-radius:10px;padding:11px 14px;font-size:13px;
+.login-box input{width:100%;background:rgba(8,18,34,.76);border:1px solid rgba(125,211,252,.24);
+  color:#d8f5ff;border-radius:10px;padding:11px 14px;font-size:13px;
   transition:border-color .2s,box-shadow .2s}
-.login-box input::placeholder{color:rgba(150,100,120,.35)}
-.login-box input:focus{border-color:rgba(219,39,119,.45);
-  box-shadow:0 0 0 3px rgba(249,168,212,.2);outline:none;background:rgba(255,255,255,.9)}
-.login-err{color:#e11d48;font-size:12px;margin-top:10px;text-align:center;min-height:18px}
+.login-box input::placeholder{color:rgba(148,163,184,.5)}
+.login-box input:focus{border-color:rgba(103,217,255,.52);
+  box-shadow:0 0 0 3px rgba(56,189,248,.16);outline:none;background:rgba(10,22,40,.94)}
+.login-err{color:#fb7185;font-size:12px;margin-top:10px;text-align:center;min-height:18px}
 .btn-login{width:100%;padding:12px;font-size:14px;font-weight:700;margin-top:8px;
-  background:linear-gradient(135deg,#db2777,#ea580c);border:none;border-radius:10px;
+  background:linear-gradient(135deg,#0ea5e9,#4f6dff);border:none;border-radius:10px;
   color:#fff;cursor:pointer;letter-spacing:.08em;
-  box-shadow:0 4px 20px rgba(219,39,119,.28);transition:.2s}
-.btn-login:hover{box-shadow:0 6px 28px rgba(219,39,119,.4);transform:translateY(-1px)}
+  box-shadow:0 4px 20px rgba(59,130,246,.28);transition:.2s}
+.btn-login:hover{box-shadow:0 6px 28px rgba(59,130,246,.4);transform:translateY(-1px)}
 .btn-login:active{transform:translateY(0);opacity:.9}
 
 /* ── 侧边栏 Logo ── */
@@ -669,7 +666,7 @@ nav{
   padding:14px 10px 18px;
 }
 nav::before{
-  content:'SYSTEM GRID';
+  content:'TOKENLENS';
   display:block;
   margin:0 8px 10px;
   font-size:10px;
@@ -1147,8 +1144,8 @@ body.light .empty{
 <div id="login-page">
   <!-- 背景装饰 -->
   <div class="login-bg-text" aria-hidden="true">
-    <span>言念君子</span>
-    <span>温其如玉</span>
+    <span>探云识险</span>
+    <span>令启全域</span>
   </div>
   <div class="login-glow login-glow-a"></div>
   <div class="login-glow login-glow-b"></div>
@@ -1157,39 +1154,30 @@ body.light .empty{
 
   <div class="login-box">
     <div class="login-logo">
-      <svg width="38" height="38" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
         <defs>
-          <linearGradient id="hg" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#f9a8d4"/>
-            <stop offset="100%" stop-color="#ea580c"/>
+          <linearGradient id="tyl-login" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#9cecff"/>
+            <stop offset="55%" stop-color="#57c7ff"/>
+            <stop offset="100%" stop-color="#4f6dff"/>
           </linearGradient>
           <filter id="glow-l" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
             <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
         </defs>
-        <!-- 外六边形 -->
-        <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
-          fill="url(#hg)" opacity=".18" filter="url(#glow-l)"/>
-        <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
-          fill="none" stroke="url(#hg)" stroke-width="1.5" filter="url(#glow-l)"/>
-        <!-- 内盾形 -->
-        <path d="M19 9 L28 13.5 L28 21 Q28 28 19 31.5 Q10 28 10 21 L10 13.5 Z"
-          fill="none" stroke="#f9a8d4" stroke-width="1.2" opacity=".7"/>
-        <!-- 代码符号 -->
-        <text x="19" y="25" text-anchor="middle" font-size="10" font-weight="900"
-          fill="#db2777" font-family="monospace" filter="url(#glow-l)">&lt;/&gt;</text>
-        <!-- 角落小圆点装饰 -->
-        <circle cx="19" cy="2" r="1.5" fill="#f9a8d4" opacity=".8"/>
-        <circle cx="34" cy="10.5" r="1.5" fill="#fb923c" opacity=".6"/>
-        <circle cx="34" cy="27.5" r="1.5" fill="#fb923c" opacity=".6"/>
-        <circle cx="19" cy="36" r="1.5" fill="#f9a8d4" opacity=".8"/>
-        <circle cx="4" cy="27.5" r="1.5" fill="#fb923c" opacity=".6"/>
-        <circle cx="4" cy="10.5" r="1.5" fill="#fb923c" opacity=".6"/>
+        <path d="M11.5 24.5C8.46 24.5 6 22.12 6 19.18C6 16.58 7.95 14.39 10.57 13.97C11.64 10.02 15.33 7.1 19.68 7.1C24.89 7.1 29.13 11.3 29.13 16.47C31.94 16.66 34.15 18.99 34.15 21.82C34.15 24.79 31.7 27.2 28.67 27.2H19.42"
+          stroke="url(#tyl-login)" stroke-width="2.2" stroke-linecap="round" filter="url(#glow-l)"/>
+        <path d="M20 15.2L28.2 19.9V29.3L20 34L11.8 29.3V19.9L20 15.2Z"
+          fill="rgba(79,109,255,0.16)" stroke="url(#tyl-login)" stroke-width="1.8"/>
+        <path d="M20 18.5L24.9 21.3V26.9L20 29.7L15.1 26.9V21.3L20 18.5Z"
+          fill="none" stroke="#b7f0ff" stroke-width="1.4"/>
+        <path d="M17.6 22.7H22.4M17.6 25.5H20.9"
+          stroke="#dff8ff" stroke-width="1.6" stroke-linecap="round"/>
       </svg>
-      <span class="login-logo-text">春静企业代码安全平台</span>
+      <span class="login-logo-text">探云令安全平台</span>
     </div>
-    <div class="login-sub">ENTERPRISE CODE SECURITY PLATFORM</div>
+    <div class="login-sub">TOKENLENS SECURITY PLATFORM</div>
     <div class="form-group">
       <label>用 户 名</label>
       <input id="login-user" type="text" placeholder="请输入用户名" autocomplete="username">
@@ -1208,25 +1196,26 @@ body.light .empty{
 <div id="app" style="display:none;width:100%;height:100%;display:none;flex-direction:row">
 <aside class="sidebar">
   <div class="logo">
-    <svg width="28" height="28" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="30" height="30" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="sg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#4ade80"/>
-          <stop offset="100%" stop-color="#16a34a"/>
+        <linearGradient id="tyl-side" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stop-color="#9cecff"/>
+          <stop offset="55%" stop-color="#57c7ff"/>
+          <stop offset="100%" stop-color="#4f6dff"/>
         </linearGradient>
       </defs>
-      <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
-        fill="url(#sg)" opacity=".22"/>
-      <polygon points="19,2 34,10.5 34,27.5 19,36 4,27.5 4,10.5"
-        fill="none" stroke="#4ade80" stroke-width="1.5"/>
-      <path d="M19 9 L28 13.5 L28 21 Q28 28 19 31.5 Q10 28 10 21 L10 13.5 Z"
-        fill="none" stroke="#86efac" stroke-width="1.2" opacity=".8"/>
-      <text x="19" y="25" text-anchor="middle" font-size="10" font-weight="900"
-        fill="#86efac" font-family="monospace">&lt;/&gt;</text>
+      <path d="M11.5 24.5C8.46 24.5 6 22.12 6 19.18C6 16.58 7.95 14.39 10.57 13.97C11.64 10.02 15.33 7.1 19.68 7.1C24.89 7.1 29.13 11.3 29.13 16.47C31.94 16.66 34.15 18.99 34.15 21.82C34.15 24.79 31.7 27.2 28.67 27.2H19.42"
+        stroke="url(#tyl-side)" stroke-width="2.1" stroke-linecap="round"/>
+      <path d="M20 15.2L28.2 19.9V29.3L20 34L11.8 29.3V19.9L20 15.2Z"
+        fill="rgba(79,109,255,0.16)" stroke="url(#tyl-side)" stroke-width="1.7"/>
+      <path d="M20 18.5L24.9 21.3V26.9L20 29.7L15.1 26.9V21.3L20 18.5Z"
+        fill="none" stroke="#b7f0ff" stroke-width="1.3"/>
+      <path d="M17.6 22.7H22.4M17.6 25.5H20.9"
+        stroke="#dff8ff" stroke-width="1.5" stroke-linecap="round"/>
     </svg>
     <div class="logo-name">
-      <span class="logo-name-main">春静安全</span>
-      <span class="logo-name-sub">CODE SECURITY</span>
+      <span class="logo-name-main">探云令</span>
+      <span class="logo-name-sub">TOKENLENS</span>
     </div>
   </div>
   <nav>
@@ -5371,7 +5360,7 @@ applyLang();
   }
 })();
 
-// ── 春意花瓣 ──────────────────────────────────────────────────────
+// ── 云雾粒子 ──────────────────────────────────────────────────────
 (function spawnPetals() {
   const container = document.getElementById('login-petals');
   if (!container) return;

@@ -114,7 +114,7 @@ def require_auth(credentials: HTTPAuthorizationCredentials = Depends(_http_beare
 db.init_db()
 db.mark_interrupted_scans()
 syslog.reload(db.get_syslog_config())
-app = FastAPI(title='春静企业代码安全平台')
+app = FastAPI(title='探云令安全平台')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
 
 
