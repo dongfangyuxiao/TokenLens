@@ -582,12 +582,12 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
     active_roles = {cfg.get('__role', 'audit') for cfg in effective_llm_cfgs}
     if auto_optimize_skills and len(effective_llm_cfgs) > 1 and len(active_roles) >= 1 and all_findings:
         try:
-            db.learn_adaptive_skills(scan_type, all_findings)
+            db.learn_adaptive_skills(scan_type, all_findings, actor='system-auto-optimize')
         except Exception as e:
             print(f'    [analyzer] adaptive skill 学习失败: {e}')
     if auto_optimize_skills and len(effective_llm_cfgs) > 1 and len(active_roles) >= 2 and rejected_findings:
         try:
-            db.learn_adaptive_skills(scan_type, rejected_findings, skill_type='negative')
+            db.learn_adaptive_skills(scan_type, rejected_findings, skill_type='negative', actor='system-auto-optimize')
         except Exception as e:
             print(f'    [analyzer] adaptive suppression 学习失败: {e}')
 

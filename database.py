@@ -211,6 +211,15 @@ def init_db():
             created_at    TEXT,
             updated_at    TEXT
         );
+        CREATE TABLE IF NOT EXISTS prompt_change_logs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            target_type TEXT NOT NULL,
+            action      TEXT NOT NULL,
+            target_name TEXT NOT NULL,
+            detail      TEXT DEFAULT '',
+            actor       TEXT DEFAULT 'system',
+            created_at  TEXT
+        );
         """)
         # Syslog 默认配置
         conn.execute("INSERT OR IGNORE INTO syslog_config VALUES ('enabled','0')")
@@ -232,6 +241,8 @@ def init_db():
             conn.execute("ALTER TABLE adaptive_skills ADD COLUMN skill_type TEXT NOT NULL DEFAULT 'positive'")
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_adaptive_skill_unique "
                      "ON adaptive_skills(skill_type, scan_type, language_key, finding_title)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_prompt_change_logs_created_at "
+                     "ON prompt_change_logs(created_at)")
         # 默认管理员账户
         row = conn.execute("SELECT username FROM admin_users WHERE username='admin'").fetchone()
         if not row:
@@ -830,7 +841,33 @@ def _normalize_role_config(role_config, llm_profile_ids=None, llm_profile_id=Non
             pass
     return {'audit': fallback, 'check': [], 'verify': []}
 
-def learn_adaptive_skills(scan_type: str, findings: list, skill_type: str = 'positive'):
+def add_prompt_change_log(target_type: str, action: str, target_name: str,
+                          detail: str = '', actor: str = 'system'):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO prompt_change_logs (target_type,action,target_name,detail,actor,created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (
+                (target_type or 'prompt').strip(),
+                (action or 'update').strip(),
+                (target_name or '').strip(),
+                (detail or '').strip(),
+                (actor or 'system').strip() or 'system',
+                datetime.now().isoformat(),
+            )
+        )
+        conn.commit()
+
+def get_prompt_change_logs(limit: int = 200):
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id,target_type,action,target_name,detail,actor,created_at "
+            "FROM prompt_change_logs ORDER BY id DESC LIMIT ?",
+            (max(1, min(int(limit or 200), 1000)),)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+def learn_adaptive_skills(scan_type: str, findings: list, skill_type: str = 'positive', actor: str = 'system'):
     if not scan_type or not findings:
         return 0
     skill_type = (skill_type or 'positive').strip().lower()
@@ -859,6 +896,7 @@ def learn_adaptive_skills(scan_type: str, findings: list, skill_type: str = 'pos
                 "WHERE skill_type=? AND scan_type=? AND language_key=? AND finding_title=?",
                 (severity, hint_text, now, skill_type, scan_type, lang_key, title)
             )
+            action = 'update'
             if cur.rowcount == 0:
                 conn.execute(
                     "INSERT INTO adaptive_skills "
@@ -866,6 +904,19 @@ def learn_adaptive_skills(scan_type: str, findings: list, skill_type: str = 'pos
                     "VALUES (?,?,?,?,?,?,?,?,?)",
                     (skill_type, scan_type, lang_key, title, hint_text, severity, 1, now, now)
                 )
+                action = 'create'
+            conn.execute(
+                "INSERT INTO prompt_change_logs (target_type,action,target_name,detail,actor,created_at) "
+                "VALUES (?,?,?,?,?,?)",
+                (
+                    'adaptive_skill',
+                    action,
+                    title,
+                    f'{skill_type} / {scan_type} / {lang_key}',
+                    (actor or 'system').strip() or 'system',
+                    now,
+                )
+            )
             learned += 1
         conn.commit()
     return learned
@@ -990,7 +1041,7 @@ def get_prompts_for_analysis():
         ).fetchall()
         return [dict(r) for r in rows]
 
-def add_prompt(name, category, extensions, content):
+def add_prompt(name, category, extensions, content, actor='system'):
     with get_conn() as conn:
         if conn.execute("SELECT 1 FROM prompts WHERE name=?", (name,)).fetchone():
             return False
@@ -1000,11 +1051,12 @@ def add_prompt(name, category, extensions, content):
             (name, category, extensions, content, datetime.now().isoformat())
         )
         conn.commit()
-        return True
+    add_prompt_change_log('prompt', 'create', name, f'{category} / {extensions}', actor)
+    return True
 
-def update_prompt(prompt_id, name, category, extensions, content, enabled):
+def update_prompt(prompt_id, name, category, extensions, content, enabled, actor='system'):
     with get_conn() as conn:
-        row = conn.execute("SELECT name,is_default FROM prompts WHERE id=?", (prompt_id,)).fetchone()
+        row = conn.execute("SELECT name,is_default,content,enabled FROM prompts WHERE id=?", (prompt_id,)).fetchone()
         if not row:
             return False
         # If renaming, check uniqueness
@@ -1016,20 +1068,29 @@ def update_prompt(prompt_id, name, category, extensions, content, enabled):
             (name, category, extensions, content, 1 if enabled else 0, prompt_id)
         )
         conn.commit()
-        return True
+    changes = []
+    if row['name'] != name:
+        changes.append(f'name: {row["name"]} -> {name}')
+    if (row['content'] or '') != content:
+        changes.append('content updated')
+    if int(row['enabled'] or 0) != (1 if enabled else 0):
+        changes.append(f'enabled: {int(row["enabled"] or 0)} -> {1 if enabled else 0}')
+    add_prompt_change_log('prompt', 'update', name, '; '.join(changes) or f'{category} / {extensions}', actor)
+    return True
 
-def delete_prompt(prompt_id):
+def delete_prompt(prompt_id, actor='system'):
     with get_conn() as conn:
-        row = conn.execute("SELECT is_default FROM prompts WHERE id=?", (prompt_id,)).fetchone()
+        row = conn.execute("SELECT name,is_default FROM prompts WHERE id=?", (prompt_id,)).fetchone()
         if not row:
             return False
         if row['is_default']:
             return False  # cannot delete built-in defaults
         conn.execute("DELETE FROM prompts WHERE id=?", (prompt_id,))
         conn.commit()
-        return True
+    add_prompt_change_log('prompt', 'delete', row['name'], 'custom prompt deleted', actor)
+    return True
 
-def reset_prompt(prompt_id):
+def reset_prompt(prompt_id, actor='system'):
     """Reset a default prompt's content back to the original."""
     from default_prompts import (
         FRONTEND_PROMPT, BACKEND_PROMPT, CONTRACT_PROMPT, JAVA_PROMPT, PHP_PROMPT,
@@ -1059,7 +1120,8 @@ def reset_prompt(prompt_id):
             return False
         conn.execute("UPDATE prompts SET content=? WHERE id=?", (original, prompt_id))
         conn.commit()
-        return True
+    add_prompt_change_log('prompt', 'reset', row['name'], 'reset to built-in default', actor)
+    return True
 
 # ── 管理员认证 & 用户管理 ─────────────────────────────────────────
 def get_admin_users():

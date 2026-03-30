@@ -1773,6 +1773,20 @@ body.light .empty{
         </div>
         <div id="promptList"></div>
       </div>
+      <div class="card">
+        <div class="card-title">系统学习到的 Skills</div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          展示系统基于联合审计结果自动优化出的正向/负向 skills，会在后续扫描时参与提示词增强。
+        </div>
+        <div id="adaptiveSkillList"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">提示词与 Skills 变更日志</div>
+        <div style="font-size:13px;color:#888;margin-bottom:16px">
+          记录人工编辑 Prompt、重置默认内容，以及系统自动优化 skills 的变化轨迹。
+        </div>
+        <div id="promptChangeLogList"></div>
+      </div>
     </div>
 
     <!-- 误报白名单 -->
@@ -4835,8 +4849,14 @@ const CATEGORY_COLOR = {
 };
 
 async function loadPrompts() {
-  const list = await api('GET', '/api/prompts').catch(() => []);
+  const [list, adaptiveSkills, changeLogs] = await Promise.all([
+    api('GET', '/api/prompts').catch(() => []),
+    api('GET', '/api/adaptive-skills?limit=200').catch(() => []),
+    api('GET', '/api/prompt-change-logs?limit=200').catch(() => []),
+  ]);
   const el = document.getElementById('promptList');
+  const skillEl = document.getElementById('adaptiveSkillList');
+  const logEl = document.getElementById('promptChangeLogList');
   if (!list.length) { el.innerHTML = '<div class="empty">暂无提示词</div>'; return; }
   el.innerHTML = `<table>
     <thead><tr><th>名称</th><th>分类</th><th>适用扩展名</th><th>状态</th><th>操作</th></tr></thead>
@@ -4852,6 +4872,40 @@ async function loadPrompts() {
         </td>
       </tr>`).join('')}
     </tbody></table>`;
+
+  if (!adaptiveSkills.length) {
+    skillEl.innerHTML = '<div class="empty">暂无系统学习到的 skills</div>';
+  } else {
+    skillEl.innerHTML = `<table>
+      <thead><tr><th>类型</th><th>任务</th><th>语言</th><th>标题</th><th>次数</th><th>更新时间</th></tr></thead>
+      <tbody>${adaptiveSkills.map(s => `
+        <tr>
+          <td>${esc(s.skill_type === 'negative' ? '负向抑制' : '正向增强')}</td>
+          <td>${esc(s.scan_type || '-')}</td>
+          <td style="font-family:monospace">${esc(s.language_key || '-')}</td>
+          <td>${esc(s.finding_title || '-')}</td>
+          <td>${esc(String(s.learn_count || 0))}</td>
+          <td style="color:#888;font-size:12px">${esc(s.updated_at || s.created_at || '-')}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
+
+  if (!changeLogs.length) {
+    logEl.innerHTML = '<div class="empty">暂无变更日志</div>';
+  } else {
+    logEl.innerHTML = `<table>
+      <thead><tr><th>时间</th><th>类型</th><th>动作</th><th>目标</th><th>说明</th><th>操作者</th></tr></thead>
+      <tbody>${changeLogs.map(x => `
+        <tr>
+          <td style="color:#888;font-size:12px;white-space:nowrap">${esc(x.created_at || '-')}</td>
+          <td>${esc(x.target_type || '-')}</td>
+          <td>${esc(x.action || '-')}</td>
+          <td>${esc(x.target_name || '-')}</td>
+          <td style="color:#666">${esc(x.detail || '-')}</td>
+          <td>${esc(x.actor || '-')}</td>
+        </tr>`).join('')}
+      </tbody></table>`;
+  }
 }
 
 let _promptsCache = [];

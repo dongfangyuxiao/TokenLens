@@ -1255,22 +1255,26 @@ def list_adaptive_skills(scan_type: str = '', language_key: str = '', skill_type
         limit=limit,
     )
 
+@app.get('/api/prompt-change-logs')
+def list_prompt_change_logs(limit: int = 200, _: str = Depends(require_auth)):
+    return db.get_prompt_change_logs(limit=limit)
+
 @app.post('/api/prompts')
-def create_prompt(body: PromptIn, _: str = Depends(require_auth)):
+def create_prompt(body: PromptIn, operator: str = Depends(require_auth)):
     if not body.name.strip():
         raise HTTPException(400, '名称不能为空')
     if not body.content.strip():
         raise HTTPException(400, '提示词内容不能为空')
-    if not db.add_prompt(body.name.strip(), body.category, body.extensions, body.content):
+    if not db.add_prompt(body.name.strip(), body.category, body.extensions, body.content, operator):
         raise HTTPException(409, '名称已存在')
     return {'ok': True}
 
 @app.put('/api/prompts/{pid}')
-def update_prompt(pid: int, body: PromptIn, _: str = Depends(require_auth)):
+def update_prompt(pid: int, body: PromptIn, operator: str = Depends(require_auth)):
     if not body.name.strip():
         raise HTTPException(400, '名称不能为空')
     result = db.update_prompt(pid, body.name.strip(), body.category,
-                               body.extensions, body.content, body.enabled)
+                               body.extensions, body.content, body.enabled, operator)
     if result is None:
         raise HTTPException(409, '名称已存在')
     if not result:
@@ -1278,14 +1282,14 @@ def update_prompt(pid: int, body: PromptIn, _: str = Depends(require_auth)):
     return {'ok': True}
 
 @app.delete('/api/prompts/{pid}')
-def delete_prompt(pid: int, _: str = Depends(require_auth)):
-    if not db.delete_prompt(pid):
+def delete_prompt(pid: int, operator: str = Depends(require_auth)):
+    if not db.delete_prompt(pid, operator):
         raise HTTPException(400, '内置提示词不可删除，或不存在')
     return {'ok': True}
 
 @app.post('/api/prompts/{pid}/reset')
-def reset_prompt(pid: int, _: str = Depends(require_auth)):
-    if not db.reset_prompt(pid):
+def reset_prompt(pid: int, operator: str = Depends(require_auth)):
+    if not db.reset_prompt(pid, operator):
         raise HTTPException(400, '仅内置提示词支持重置')
     return {'ok': True}
 
