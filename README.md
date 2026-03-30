@@ -219,7 +219,10 @@ pre-commit run --all-files
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `BASE_URL` | 报告链接前缀，用于通知消息中的跳转地址 | `http://localhost:8000` |
-| `LICENSE_SECRET` | 产品授权签名密钥，生成与校验授权文件中的 `license_token` 时必须一致 | `springstillness-dev-license-secret` |
+| `LICENSE_PRIVATE_KEY_PATH` | 授权管理系统私钥路径，仅授权系统需要 | 空 |
+| `LICENSE_PUBLIC_KEY_PATH` | 代码审计系统公钥路径，仅审计系统需要 | 空 |
+| `LICENSE_PRIVATE_KEY` | 授权管理系统私钥 PEM 内容，可替代文件路径 | 空 |
+| `LICENSE_PUBLIC_KEY` | 代码审计系统公钥 PEM 内容，可替代文件路径 | 空 |
 | `PRODUCT_INSTANCE_ID` | 手工指定当前机器码；不设置时自动按主机信息生成 | 自动生成 |
 | `DB_PATH` | SQLite 数据库文件路径 | `audit.db` |
 | `REPORTS_DIR` | 报告目录（`/reports` 静态映射来源） | `reports` |
@@ -256,8 +259,22 @@ pre-commit run --all-files
 
 1. 将项目放到 `/opt/springstillness`
 2. 按实际域名修改 `deploy/nginx/springstillness.conf`
-3. 按实际路径和环境变量修改两个 `systemd` service 文件
-4. 启动两个服务
+3. 先生成 Ed25519 公私钥
+4. 按实际路径和环境变量修改两个 `systemd` service 文件
+5. 启动两个服务
+
+```bash
+mkdir -p /opt/springstillness/keys
+python3 license_manager.py generate-keypair \
+  --private-key-out /opt/springstillness/keys/license_private.pem \
+  --public-key-out /opt/springstillness/keys/license_public.pem
+```
+
+其中：
+
+- `license_private.pem` 只放在授权管理系统所在机器
+- `license_public.pem` 放到代码审计系统所在机器
+- 私钥不要下发到代码审计系统
 
 ```bash
 sudo cp deploy/systemd/springstillness-audit.service /etc/systemd/system/
@@ -267,7 +284,7 @@ sudo systemctl enable --now springstillness-audit
 sudo systemctl enable --now springstillness-license-admin
 ```
 
-5. 加载 Nginx 配置
+6. 加载 Nginx 配置
 
 ```bash
 sudo cp deploy/nginx/springstillness.conf /etc/nginx/conf.d/
@@ -277,10 +294,10 @@ sudo systemctl reload nginx
 
 ### 在独立授权管理系统中生成授权文件
 
-先设置签名密钥：
+先准备授权私钥：
 
 ```bash
-export LICENSE_SECRET='replace-with-your-secret'
+export LICENSE_PRIVATE_KEY_PATH=./keys/license_private.pem
 ```
 
 先在目标部署机器的 **系统设置 → 产品授权** 下载机器码文件，或复制机器码，然后在授权管理系统或签发环境执行：
@@ -320,6 +337,8 @@ python3 license_manager.py generate-file \
 ### 校验授权文件
 
 ```bash
+export LICENSE_PUBLIC_KEY_PATH=./keys/license_public.pem
+
 python3 license_manager.py verify-file \
   --license-file ./license_acme.json \
   --machine-code '粘贴系统设置页里的机器码'

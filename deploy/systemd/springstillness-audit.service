@@ -9,7 +9,7 @@ Environment=BASE_URL=https://audit.example.com
 Environment=DB_PATH=/opt/springstillness/audit.db
 Environment=REPORTS_DIR=/opt/springstillness/reports
 Environment=SYNC_ROOT=/opt/springstillness/synced_repos
-Environment=LICENSE_SECRET=replace-with-your-secret
+Environment=LICENSE_PUBLIC_KEY_PATH=/opt/springstillness/keys/license_public.pem
 ExecStart=/usr/bin/env uvicorn app:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=5

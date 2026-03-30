@@ -1,7 +1,6 @@
 import argparse
 import base64
 import hashlib
-import hmac
 import json
 import os
 import socket
@@ -10,8 +9,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+
 DEFAULT_PRODUCT = 'SpringStillness'
-DEV_SECRET = 'springstillness-dev-license-secret'
 
 
 def _b64url_encode(data: bytes) -> str:
@@ -34,8 +36,59 @@ def _parse_iso8601(text: str):
     return datetime.fromisoformat(normalized)
 
 
-def get_secret() -> str:
-    return os.getenv('LICENSE_SECRET', DEV_SECRET)
+def _read_text_from_env_or_path(value_env: str, path_env: str) -> str:
+    inline = os.getenv(value_env, '').strip()
+    if inline:
+        return inline
+    path = os.getenv(path_env, '').strip()
+    if path:
+        return Path(path).read_text(encoding='utf-8').strip()
+    return ''
+
+
+def get_private_key() -> Ed25519PrivateKey:
+    pem = _read_text_from_env_or_path('LICENSE_PRIVATE_KEY', 'LICENSE_PRIVATE_KEY_PATH')
+    if not pem:
+        raise RuntimeError('未配置 LICENSE_PRIVATE_KEY 或 LICENSE_PRIVATE_KEY_PATH')
+    key = serialization.load_pem_private_key(pem.encode('utf-8'), password=None)
+    if not isinstance(key, Ed25519PrivateKey):
+        raise RuntimeError('私钥类型不正确，当前仅支持 Ed25519')
+    return key
+
+
+def get_public_key() -> Ed25519PublicKey:
+    pem = _read_text_from_env_or_path('LICENSE_PUBLIC_KEY', 'LICENSE_PUBLIC_KEY_PATH')
+    if not pem:
+        raise RuntimeError('未配置 LICENSE_PUBLIC_KEY 或 LICENSE_PUBLIC_KEY_PATH')
+    key = serialization.load_pem_public_key(pem.encode('utf-8'))
+    if not isinstance(key, Ed25519PublicKey):
+        raise RuntimeError('公钥类型不正确，当前仅支持 Ed25519')
+    return key
+
+
+def generate_keypair(private_key_path: str, public_key_path: str):
+    private_key = Ed25519PrivateKey.generate()
+    public_key = private_key.public_key()
+    private_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode('utf-8')
+    public_pem = public_key.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode('utf-8')
+    private_path = Path(private_key_path)
+    public_path = Path(public_key_path)
+    private_path.parent.mkdir(parents=True, exist_ok=True)
+    public_path.parent.mkdir(parents=True, exist_ok=True)
+    private_path.write_text(private_pem, encoding='utf-8')
+    public_path.write_text(public_pem, encoding='utf-8')
+    try:
+        os.chmod(private_path, 0o600)
+    except Exception:
+        pass
+    return str(private_path), str(public_path)
 
 
 def get_machine_code() -> str:
@@ -59,14 +112,15 @@ def build_license_payload(customer: str, expires_at: str, product: str = DEFAULT
     }
 
 
-def generate_license_token(payload: dict, secret: Optional[str] = None) -> str:
+def generate_license_token(payload: dict, private_key: Optional[Ed25519PrivateKey] = None) -> str:
     body = json.dumps(payload, ensure_ascii=False, separators=(',', ':'), sort_keys=True).encode('utf-8')
     encoded = _b64url_encode(body)
-    digest = hmac.new((secret or get_secret()).encode('utf-8'), encoded.encode('ascii'), hashlib.sha256).digest()
-    return f'{encoded}.{_b64url_encode(digest)}'
+    signature = (private_key or get_private_key()).sign(encoded.encode('ascii'))
+    return f'{encoded}.{_b64url_encode(signature)}'
 
 
-def verify_license_token(token: str, secret: Optional[str] = None, expected_product: str = DEFAULT_PRODUCT,
+def verify_license_token(token: str, public_key: Optional[Ed25519PublicKey] = None,
+                         expected_product: str = DEFAULT_PRODUCT,
                          expected_machine_code: Optional[str] = None) -> dict:
     token = (token or '').strip()
     if not token:
@@ -75,13 +129,12 @@ def verify_license_token(token: str, secret: Optional[str] = None, expected_prod
         encoded, signature = token.split('.', 1)
     except ValueError:
         return {'valid': False, 'state': 'format_error', 'message': '授权文件令牌格式不正确'}
-    expected_sig = _b64url_encode(hmac.new(
-        (secret or get_secret()).encode('utf-8'),
-        encoded.encode('ascii'),
-        hashlib.sha256
-    ).digest())
-    if not hmac.compare_digest(signature, expected_sig):
+    try:
+        (public_key or get_public_key()).verify(_b64url_decode(signature), encoded.encode('ascii'))
+    except InvalidSignature:
         return {'valid': False, 'state': 'invalid_signature', 'message': '授权文件签名校验失败'}
+    except Exception as exc:
+        return {'valid': False, 'state': 'verify_error', 'message': f'授权公钥校验失败：{exc}'}
     try:
         payload = json.loads(_b64url_decode(encoded).decode('utf-8'))
     except Exception:
@@ -131,8 +184,12 @@ def load_machine_code(text: str) -> str:
 
 
 def _build_parser():
-    parser = argparse.ArgumentParser(description='SpringStillness 授权文件工具')
+    parser = argparse.ArgumentParser(description='SpringStillness 授权文件工具（Ed25519）')
     sub = parser.add_subparsers(dest='command', required=True)
+
+    keygen = sub.add_parser('generate-keypair', help='生成 Ed25519 公私钥')
+    keygen.add_argument('--private-key-out', default='license_private.pem', help='私钥输出路径')
+    keygen.add_argument('--public-key-out', default='license_public.pem', help='公钥输出路径')
 
     gen_file = sub.add_parser('generate-file', help='生成授权文件（JSON）')
     gen_file.add_argument('--customer', required=True, help='客户名称')
@@ -153,6 +210,10 @@ def _build_parser():
 def main():
     parser = _build_parser()
     args = parser.parse_args()
+    if args.command == 'generate-keypair':
+        private_path, public_path = generate_keypair(args.private_key_out, args.public_key_out)
+        print(json.dumps({'private_key_path': private_path, 'public_key_path': public_path}, ensure_ascii=False, indent=2))
+        return
     if args.command == 'generate-file':
         payload = build_license_payload(
             customer=args.customer,
@@ -169,7 +230,6 @@ def main():
         path.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding='utf-8')
         print(str(path))
         return
-
     text = Path(args.license_file).read_text(encoding='utf-8')
     token = load_license_file_content(text)
     result = verify_license_token(

@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 WorkingDirectory=/opt/springstillness
 Environment=DB_PATH=/opt/springstillness/audit.db
-Environment=LICENSE_SECRET=replace-with-your-secret
+Environment=LICENSE_PRIVATE_KEY_PATH=/opt/springstillness/keys/license_private.pem
 ExecStart=/usr/bin/env uvicorn license_admin_app:app --host 127.0.0.1 --port 8001
 Restart=always
 RestartSec=5

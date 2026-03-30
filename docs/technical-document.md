@@ -762,7 +762,10 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `BASE_URL` | 通知消息中的平台跳转地址 | `http://localhost:8000` |
-| `LICENSE_SECRET` | 授权签名密钥，签发与校验必须一致 | `springstillness-dev-license-secret` |
+| `LICENSE_PRIVATE_KEY_PATH` | 授权管理系统私钥路径，仅授权系统需要 | 空 |
+| `LICENSE_PUBLIC_KEY_PATH` | 代码审计系统公钥路径，仅审计系统需要 | 空 |
+| `LICENSE_PRIVATE_KEY` | 授权管理系统私钥 PEM 内容，可替代文件路径 | 空 |
+| `LICENSE_PUBLIC_KEY` | 代码审计系统公钥 PEM 内容，可替代文件路径 | 空 |
 | `PRODUCT_INSTANCE_ID` | 手工指定机器码；未设置时自动根据主机信息生成 | 自动生成 |
 
 ---
@@ -799,7 +802,7 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 ### v2.1（2026-03-26）
 
 **新增**
-- 产品授权模块 `license_manager.py`，支持 HMAC-SHA256 授权文件签发与校验
+- 产品授权模块 `license_manager.py`，支持 Ed25519 公私钥授权文件签发与校验
 - 系统设置新增授权文件上传、机器码文件下载、机器码展示、授权状态查看与授权校验开关
 - 新增 `/api/license-status`、`/api/license-config`、`/api/license/machine-file`、`/api/license/upload-file`、`/api/license/generate-file` 授权接口
 - 新增授权临期提醒、界面授权水印，以及基于 `features` 的能力控制
