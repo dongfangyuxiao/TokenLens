@@ -1,6 +1,6 @@
 import os, json, threading, secrets, re, zipfile, io, html as _html, subprocess, tempfile, shutil
 from datetime import datetime, timedelta
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Query
 from fastapi.responses import HTMLResponse, FileResponse, Response, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -114,7 +114,7 @@ def require_auth(credentials: HTTPAuthorizationCredentials = Depends(_http_beare
 db.init_db()
 db.mark_interrupted_scans()
 syslog.reload(db.get_syslog_config())
-app = FastAPI(title='探云令安全平台')
+app = FastAPI(title='探云令 TokenLens')
 app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
 
 
@@ -894,8 +894,22 @@ def resume_scan(operator: str = Depends(require_auth)):
     return {'ok': True, 'msg': '扫描已恢复'}
 
 @app.get('/api/scans')
-def list_scans(_: str = Depends(require_auth)):
-    return db.get_scans()
+def list_scans(
+    page: int = Query(1, ge=1, description="页码，从1开始"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    _: str = Depends(require_auth)
+):
+    total = db.get_scans_count()
+    offset = (page - 1) * page_size
+    items = db.get_scans(limit=page_size, offset=offset)
+    total_pages = (total + page_size - 1) // page_size
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages
+    }
 
 @app.delete('/api/scans/{scan_id}')
 def delete_scan(scan_id: int, _: str = Depends(require_auth)):
@@ -1062,6 +1076,14 @@ def export_scan(scan_id: int, format: str = 'json', _: str = Depends(require_aut
             media_type='text/markdown; charset=utf-8',
             headers={'Content-Disposition': f'attachment; filename="scan_{scan_id}.md"'}
         )
+
+@app.get('/api/findings')
+def list_findings(severity: str = None, limit: int = 200, _: str = Depends(require_auth)):
+    """跨所有扫描查询漏洞，支持按严重度筛选。"""
+    rows = db.get_findings_by_severity(severity, limit)
+    for r in rows:
+        r['commit_url'] = _safe_http_url(r.get('commit_url', ''))
+    return rows
 
 @app.get('/api/findings/{finding_id}')
 def get_finding(finding_id: int, _: str = Depends(require_auth)):

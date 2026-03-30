@@ -706,11 +706,16 @@ def delete_scan(scan_id: int):
         conn.execute("DELETE FROM scans      WHERE id=?",      (scan_id,))
         conn.commit()
 
-def get_scans(limit=50):
+def get_scans(limit=50, offset=0, status_filter=None):
     with get_conn() as conn:
-        rows = [dict(r) for r in conn.execute(
-            "SELECT * FROM scans ORDER BY id DESC LIMIT ?", (limit,)
-        ).fetchall()]
+        sql = "SELECT * FROM scans"
+        params = []
+        if status_filter:
+            sql += " WHERE status = ?"
+            params.append(status_filter)
+        sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
     for row in rows:
         try:
             row['llm_profile_ids'] = json.loads(row.get('llm_profile_ids') or '[]')
@@ -723,6 +728,16 @@ def get_scans(limit=50):
         )
         row['optimize_skills'] = bool(int(row.get('optimize_skills') or 0))
     return rows
+
+def get_scans_count(status_filter=None):
+    with get_conn() as conn:
+        sql = "SELECT COUNT(*) as total FROM scans"
+        params = []
+        if status_filter:
+            sql += " WHERE status = ?"
+            params.append(status_filter)
+        row = conn.execute(sql, params).fetchone()
+        return row['total'] if row else 0
 
 def get_scan(scan_id: int):
     with get_conn() as conn:
@@ -814,6 +829,23 @@ def get_scan_findings(scan_id: int):
             "WHEN 'medium' THEN 2 ELSE 3 END, id",
             (scan_id,)
         ).fetchall()
+        return [dict(r) for r in rows]
+
+def get_findings_by_severity(severity: str = None, limit: int = 200):
+    with get_conn() as conn:
+        if severity and severity != 'all':
+            rows = conn.execute(
+                "SELECT * FROM findings WHERE severity=? "
+                "ORDER BY id DESC LIMIT ?",
+                (severity, limit)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM findings "
+                "ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'high' THEN 1 "
+                "WHEN 'medium' THEN 2 ELSE 3 END, id DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
         return [dict(r) for r in rows]
 
 def get_finding_detail(finding_id: int):
