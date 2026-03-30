@@ -92,6 +92,8 @@ SpringStillness/
 ├── analyzer.py             # LLM / Semgrep / OpenSCA 分析引擎
 ├── database.py             # SQLite 数据访问层，DDL 与所有 CRUD
 ├── license_manager.py      # 产品授权签发 / 校验工具
+├── license_admin_app.py    # 独立授权管理系统
+├── deploy/                 # systemd / nginx 部署样例
 ├── repo_sync.py            # 全量扫描代码快照同步 + 跨仓库关键词检索
 ├── reporter.py             # 报告生成（Markdown / JSON / HTML）
 ├── sbom.py                 # 依赖清单解析（SCA 组件提取）
@@ -377,7 +379,7 @@ run_scan(base_url, scan_type, stop_event, pause_event, manual, llm_profile_id)
 #### `app_config` / `llm_config` / `syslog_config`
 | 表 | 说明 |
 |----|------|
-| `app_config` | 系统参数，如 `max_diff_chars`、`scan_include_config_files`、`opensca_token`、`semgrep_token`、`license_key`、`license_enforce_enabled` |
+| `app_config` | 系统参数，如 `max_diff_chars`、`scan_include_config_files`、`opensca_token`、`semgrep_token`、`license_token`、`license_enforce_enabled` |
 | `llm_config` | 系统默认 LLM 配置（`provider/model/api_key/base_url`） |
 | `syslog_config` | Syslog 主机、端口、协议、facility（支持多值）和 app_name |
 
@@ -497,10 +499,9 @@ Authorization: Bearer <token>
 | GET | `/api/settings` | 获取系统配置 |
 | POST | `/api/settings` | 更新系统配置 |
 | GET | `/api/license-status` | 获取产品授权状态 |
-| POST | `/api/license-config` | 保存授权码与授权拦截开关 |
+| POST | `/api/license-config` | 保存授权拦截开关 |
 | GET | `/api/license/machine-file` | 下载当前实例机器码文件（JSON） |
 | POST | `/api/license/upload-file` | 上传授权文件并应用 |
-| POST | `/api/license/generate-file` | 按机器码生成授权文件并下载 |
 | GET | `/api/admin-users` | 用户列表 |
 | POST | `/api/admin-users` | 创建用户 |
 | PATCH | `/api/admin-users/{username}/password` | 修改密码 |
@@ -762,7 +763,7 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 |------|------|--------|
 | `BASE_URL` | 通知消息中的平台跳转地址 | `http://localhost:8000` |
 | `LICENSE_SECRET` | 授权签名密钥，签发与校验必须一致 | `springstillness-dev-license-secret` |
-| `PRODUCT_INSTANCE_ID` | 手工指定实例 ID；未设置时自动根据主机信息生成 | 自动生成 |
+| `PRODUCT_INSTANCE_ID` | 手工指定机器码；未设置时自动根据主机信息生成 | 自动生成 |
 
 ---
 
@@ -783,11 +784,23 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 
 ## 15. 版本变更记录
 
+### v2.2（2026-03-30）
+
+**新增**
+- 授权前端主流程重构为“机器码展示 + 授权文件导入”，客户侧无需再手工粘贴授权文件令牌
+- 新增独立授权管理系统 `license_admin_app.py`，授权管理端支持按客户机器码生成授权文件并下载
+- `GET /api/license-status` 返回 `machine_code` 字段，机器码文件导出同步写入 `machine_code`
+- 新增 `license_records` 授权台账表，支持历史授权查询、备注、吊销/恢复、重下载和删除
+
+**优化**
+- `/api/license-config` 收敛为仅保存授权拦截开关，授权内容统一通过导入授权文件生效
+- 授权状态提示统一改为授权文件导入语义，并统一使用 `license_token` / `machine_code` 字段
+
 ### v2.1（2026-03-26）
 
 **新增**
-- 产品授权模块 `license_manager.py`，支持 HMAC-SHA256 授权码签发与校验
-- 系统设置新增授权码录入、授权文件上传、机器码文件下载、实例 ID 展示、授权状态查看与授权校验开关
+- 产品授权模块 `license_manager.py`，支持 HMAC-SHA256 授权文件签发与校验
+- 系统设置新增授权文件上传、机器码文件下载、机器码展示、授权状态查看与授权校验开关
 - 新增 `/api/license-status`、`/api/license-config`、`/api/license/machine-file`、`/api/license/upload-file`、`/api/license/generate-file` 授权接口
 - 新增授权临期提醒、界面授权水印，以及基于 `features` 的能力控制
 
@@ -818,7 +831,7 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 
 本次更新覆盖了授权能力、稳定性修复、前端视觉重构和文档对齐：
 
-- 新增产品授权模块，支持 HMAC-SHA256 授权码签发、实例 ID 绑定、后台录入与状态校验
+- 新增产品授权模块，支持 HMAC-SHA256 授权文件签发、机器码绑定、导入与状态校验
 - 新增授权临期提醒、顶部授权状态胶囊、右下角授权水印，以及按 `features` 控制功能点
 - 默认不启用授权拦截，授权联调可先上线配置，再按需开启校验
 
@@ -851,3 +864,16 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 - Syslog 转发
 - 漏洞白名单与状态管理
 - 即时检测（代码粘贴 / ZIP 上传）
+### 独立授权管理系统 `license_admin_app.py`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/login` | 登录授权管理系统 |
+| POST | `/api/logout` | 退出授权管理系统 |
+| GET | `/api/me` | 获取当前登录用户 |
+| POST | `/api/license/generate-file` | 按机器码生成授权文件并下载 |
+| GET | `/api/license-records` | 查询授权台账列表 |
+| GET | `/api/license-records/summary` | 查询授权台账统计 |
+| GET | `/api/license-records/{id}/download` | 重新下载历史授权文件 |
+| PATCH | `/api/license-records/{id}` | 更新授权台账状态或备注 |
+| DELETE | `/api/license-records/{id}` | 删除授权台账记录 |

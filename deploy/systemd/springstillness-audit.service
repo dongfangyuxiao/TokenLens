@@ -1,0 +1,20 @@
+[Unit]
+Description=SpringStillness Audit Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/springstillness
+Environment=BASE_URL=https://audit.example.com
+Environment=DB_PATH=/opt/springstillness/audit.db
+Environment=REPORTS_DIR=/opt/springstillness/reports
+Environment=SYNC_ROOT=/opt/springstillness/synced_repos
+Environment=LICENSE_SECRET=replace-with-your-secret
+ExecStart=/usr/bin/env uvicorn app:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

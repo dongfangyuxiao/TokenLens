@@ -189,13 +189,13 @@ _FEATURE_LABELS = {
 
 def _get_license_status():
     cfg = db.get_app_config()
-    license_key = (cfg.get('license_key') or '').strip()
+    license_token = (cfg.get('license_token') or '').strip()
     enforce_enabled = cfg.get('license_enforce_enabled', '0') == '1'
-    instance_id = license_manager.get_instance_id()
-    result = license_manager.verify_license(
-        license_key,
+    machine_code = license_manager.get_machine_code()
+    result = license_manager.verify_license_token(
+        license_token,
         expected_product=license_manager.DEFAULT_PRODUCT,
-        expected_machine_id=instance_id,
+        expected_machine_code=machine_code,
     )
     payload = result.get('payload') or {}
     expires_at = payload.get('expires_at', '')
@@ -212,12 +212,12 @@ def _get_license_status():
         except Exception:
             expires_in_days = None
     return {
-        'configured': bool(license_key),
+        'configured': bool(license_token),
         'enforce_enabled': enforce_enabled,
-        'instance_id': instance_id,
+        'machine_code': machine_code,
         'valid': result.get('valid', False),
         'state': result.get('state', 'missing'),
-        'message': result.get('message', '未配置授权码'),
+        'message': '未导入授权文件' if not license_token else result.get('message', '授权校验失败'),
         'product': payload.get('product', license_manager.DEFAULT_PRODUCT),
         'customer': payload.get('customer', ''),
         'issued_at': payload.get('issued_at', ''),
@@ -225,7 +225,7 @@ def _get_license_status():
         'expires_in_days': expires_in_days,
         'warning': warning,
         'features': payload.get('features', []),
-        'machine_id': payload.get('machine_id', ''),
+        'bound_machine_code': payload.get('machine_code', ''),
         'metadata': payload.get('metadata', {}),
     }
 
@@ -694,35 +694,24 @@ def get_license_status(_: str = Depends(require_auth)):
 
 
 class LicenseConfigIn(BaseModel):
-    license_key: str = ''
-    replace_license_key: bool = False
     enforce_enabled: bool = False
-
-class LicenseGenerateIn(BaseModel):
-    customer: str
-    expires_at: str
-    machine_id: str = ''
-    features: List[str] = []
-    product: str = license_manager.DEFAULT_PRODUCT
-    metadata: dict = {}
 
 
 @app.post('/api/license-config')
 def save_license_config(body: LicenseConfigIn, _: str = Depends(require_auth)):
-    if body.replace_license_key:
-        db.set_app_config('license_key', body.license_key.strip())
     db.set_app_config('license_enforce_enabled', '1' if body.enforce_enabled else '0')
     return {'ok': True, 'status': _get_license_status()}
 
 @app.get('/api/license/machine-file')
 def download_machine_file(_: str = Depends(require_auth)):
+    machine_code = license_manager.get_machine_code()
     payload = {
         'product': license_manager.DEFAULT_PRODUCT,
-        'instance_id': license_manager.get_instance_id(),
+        'machine_code': machine_code,
         'generated_at': datetime.now().isoformat(),
     }
     content = json.dumps(payload, ensure_ascii=False, indent=2)
-    fname = f'machine_id_{payload["instance_id"]}.json'
+    fname = f'machine_code_{machine_code}.json'
     return Response(
         content=content.encode('utf-8'),
         media_type='application/json; charset=utf-8',
@@ -745,52 +734,15 @@ async def upload_license_file(
     if not text:
         raise HTTPException(400, '授权文件内容为空')
 
-    license_key = ''
-    if text.startswith('{'):
-        try:
-            data = json.loads(text)
-            license_key = (data.get('license_key') or data.get('token') or '').strip()
-        except Exception:
-            raise HTTPException(400, '授权文件不是有效 JSON')
-    else:
-        license_key = text
-    if not license_key:
-        raise HTTPException(400, '授权文件中未找到 license_key')
+    try:
+        license_token = license_manager.load_license_file_content(text)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
 
-    db.set_app_config('license_key', license_key)
+    db.set_app_config('license_token', license_token)
     if enforce_enabled is not None:
         db.set_app_config('license_enforce_enabled', '1' if enforce_enabled else '0')
     return {'ok': True, 'status': _get_license_status()}
-
-@app.post('/api/license/generate-file')
-def generate_license_file(body: LicenseGenerateIn, _: str = Depends(require_auth)):
-    customer = (body.customer or '').strip()
-    if not customer:
-        raise HTTPException(400, '客户名称不能为空')
-    expires_at = (body.expires_at or '').strip()
-    if not license_manager._parse_iso8601(expires_at):
-        raise HTTPException(400, '过期时间格式不正确，请使用 ISO8601 格式')
-
-    machine_id = (body.machine_id or '').strip() or license_manager.get_instance_id()
-    features = [str(x).strip() for x in (body.features or []) if str(x).strip()]
-    payload = license_manager.build_payload(
-        customer=customer,
-        expires_at=expires_at,
-        product=(body.product or license_manager.DEFAULT_PRODUCT).strip() or license_manager.DEFAULT_PRODUCT,
-        features=features,
-        machine_id=machine_id,
-        metadata=body.metadata or {},
-    )
-    license_key = license_manager.generate_license(payload)
-    out = {**payload, 'license_key': license_key}
-    ts = datetime.now().strftime('%Y%m%d_%H%M%S')
-    safe_customer = re.sub(r'[^0-9A-Za-z._-]+', '_', customer)[:32] or 'customer'
-    fname = f'license_{safe_customer}_{machine_id[:8]}_{ts}.json'
-    return Response(
-        content=json.dumps(out, ensure_ascii=False, indent=2).encode('utf-8'),
-        media_type='application/json; charset=utf-8',
-        headers={'Content-Disposition': f'attachment; filename="{fname}"'}
-    )
 
 # ── 扫描时间表 API ────────────────────────────────────────────────
 _VALID_TYPES = {'poison', 'incremental_audit', 'full_audit'}

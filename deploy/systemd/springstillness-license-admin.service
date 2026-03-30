@@ -1,0 +1,17 @@
+[Unit]
+Description=SpringStillness License Admin Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/springstillness
+Environment=DB_PATH=/opt/springstillness/audit.db
+Environment=LICENSE_SECRET=replace-with-your-secret
+ExecStart=/usr/bin/env uvicorn license_admin_app:app --host 127.0.0.1 --port 8001
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

@@ -2046,22 +2046,26 @@ body.light .empty{
       <div class="card">
         <div class="card-title">产品授权</div>
         <div style="font-size:13px;color:#888;margin-bottom:16px">
-          当前版本已支持授权码配置与校验，但默认不启用拦截。建议先录入授权码完成联调，确认无误后再开启授权校验。
+          当前授权模式采用“机器码 + 授权文件”方式。客户侧先查看并导出机器码，授权侧据此签发授权文件，导入后即可继续使用。
         </div>
         <div class="form-row col2">
           <div class="form-group">
-            <label>实例 ID</label>
-            <input id="licenseInstanceId" readonly placeholder="加载中">
+            <label>机器码</label>
+            <input id="licenseMachineCode" readonly placeholder="加载中">
           </div>
+          <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
+            <button class="btn btn-default" onclick="copyMachineCode()">复制机器码</button>
+            <button class="btn btn-default" onclick="downloadMachineFile()">下载机器码文件</button>
+          </div>
+        </div>
+        <div class="form-row col2">
           <div class="form-group">
             <label>授权状态</label>
             <input id="licenseStateText" readonly placeholder="未校验">
           </div>
-        </div>
-        <div class="form-row">
           <div class="form-group">
-            <label>授权码</label>
-            <textarea id="licenseKey" rows="5" placeholder="粘贴授权码"></textarea>
+            <label>客户</label>
+            <input id="licenseCustomer" readonly placeholder="-">
           </div>
         </div>
         <div class="form-row col2">
@@ -2069,49 +2073,21 @@ body.light .empty{
             <label>上传授权文件（.json/.lic/.txt）</label>
             <input id="licenseFile" type="file" accept=".json,.lic,.txt,application/json,text/plain">
           </div>
-          <div class="form-group" style="display:flex;align-items:flex-end;gap:8px">
-            <button class="btn btn-default" onclick="uploadLicenseFile()">上传并应用</button>
-            <button class="btn btn-default" onclick="downloadMachineFile()">下载机器码文件</button>
-          </div>
-        </div>
-        <div style="font-size:12px;color:#888;margin:-4px 0 10px">
-          建议先下载机器码文件发给授权签发方；收到授权文件后在此上传即可生效。
-        </div>
-        <div style="margin:10px 0 8px;font-size:13px;font-weight:600;color:#333">授权文件生成（按机器码）</div>
-        <div class="form-row col2">
-          <div class="form-group">
-            <label>客户名称</label>
-            <input id="licenseGenCustomer" placeholder="如：Acme Corp">
-          </div>
-          <div class="form-group">
-            <label>到期时间</label>
-            <input id="licenseGenExpiresAt" type="datetime-local">
-          </div>
-        </div>
-        <div class="form-row col2">
-          <div class="form-group">
-            <label>机器码（默认当前实例）</label>
-            <input id="licenseGenMachineId" placeholder="不填则使用当前实例 ID">
-          </div>
-          <div class="form-group">
-            <label>功能点（逗号分隔，可选）</label>
-            <input id="licenseGenFeatures" placeholder="poison_scan,incremental_audit,full_audit,instant_analysis">
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <button class="btn btn-default" onclick="generateLicenseFile()">生成授权文件并下载</button>
-          </div>
-        </div>
-        <div class="form-row col2">
-          <div class="form-group">
-            <label>客户</label>
-            <input id="licenseCustomer" readonly placeholder="-">
-          </div>
           <div class="form-group">
             <label>到期时间</label>
             <input id="licenseExpiresAt" readonly placeholder="-">
           </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <button class="btn btn-default" onclick="uploadLicenseFile()">上传并应用授权文件</button>
+          </div>
+        </div>
+        <div style="font-size:12px;color:#888;margin:-4px 0 10px">
+          推荐流程：导出机器码文件发送给授权签发方，签发方生成授权文件后，再回到这里导入。
+        </div>
+        <div style="font-size:12px;color:#888;margin:8px 0 12px">
+          授权签发和授权台账已拆分到独立的授权管理系统；本系统只保留机器码展示、授权文件导入和本地授权校验。
         </div>
         <div class="form-row" style="align-items:center;margin-bottom:12px">
           <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#1a1a1a">
@@ -2123,9 +2099,9 @@ body.light .empty{
           </label>
         </div>
         <div id="licenseHint" style="font-size:12px;color:#888;margin-bottom:14px">
-          默认关闭，不会拦截扫描或即时分析。
+          默认关闭，不会拦截扫描或即时分析；启用后会校验导入的授权文件是否有效。
         </div>
-        <button class="btn btn-primary" onclick="saveLicenseConfig()">保存授权配置</button>
+        <button class="btn btn-primary" onclick="saveLicenseConfig()">保存授权拦截配置</button>
       </div>
 
       <div class="card">
@@ -2725,7 +2701,7 @@ function updateLicenseUI(status) {
     : (isEn ? 'Observe Only' : '仅展示未拦截');
   const baseText = status.valid
     ? (isEn ? 'Licensed' : '授权有效')
-    : (status.configured ? (isEn ? 'License Issue' : '授权异常') : (isEn ? 'No License' : '未配置授权'));
+    : (status.configured ? (isEn ? 'License Issue' : '授权异常') : (isEn ? 'No License' : '未导入授权'));
   badge.className = `license-badge ${status.valid ? (warning ? 'warn' : 'ok') : 'err'}`;
   badge.textContent = `${baseText} · ${modeText}`;
   wm.className = `license-watermark ${status.valid ? (warning ? 'warn' : '') : 'err'}`.trim();
@@ -5168,34 +5144,41 @@ async function testSyslog() {
 
 async function loadLicenseStatus() {
   const status = await api('GET', '/api/license-status').catch(() => ({}));
-  document.getElementById('licenseInstanceId').value = status.instance_id || '';
-  const machineEl = document.getElementById('licenseGenMachineId');
-  if (machineEl && !machineEl.value.trim()) machineEl.value = status.instance_id || '';
-  document.getElementById('licenseStateText').value = status.message || '未配置授权码';
+  document.getElementById('licenseMachineCode').value = status.machine_code || '';
+  document.getElementById('licenseStateText').value = status.message || '未导入授权文件';
   document.getElementById('licenseCustomer').value = status.customer || '-';
   document.getElementById('licenseExpiresAt').value = status.expires_at || '-';
   document.getElementById('licenseEnforceEnabled').checked = !!status.enforce_enabled;
-  document.getElementById('licenseKey').value = '';
-  document.getElementById('licenseKey').placeholder = status.configured ? '已配置授权码，重新粘贴可更新' : '粘贴授权码';
   const hint = document.getElementById('licenseHint');
-  const state = status.valid ? '校验通过' : (status.message || '未配置授权码');
+  const state = status.valid ? '校验通过' : (status.message || '未导入授权文件');
   const enabledText = status.enforce_enabled ? '当前已启用拦截' : '当前未启用拦截';
   const featureText = Array.isArray(status.features) && status.features.length ? `授权功能：${status.features.join(', ')}。` : '授权功能：未限制。';
   const warningText = status.warning ? `${status.warning}。` : '';
-  hint.textContent = `${state}，${enabledText}。${warningText}${featureText}默认关闭，不会拦截扫描或即时分析。`;
+  hint.textContent = `${state}，${enabledText}。${warningText}${featureText}授权文件导入后即可生效。`;
   updateLicenseUI(status);
 }
 
 async function saveLicenseConfig() {
-  const licenseKey = document.getElementById('licenseKey').value.trim();
   const enforceEnabled = document.getElementById('licenseEnforceEnabled').checked;
   await api('POST', '/api/license-config', {
-    license_key: licenseKey,
-    replace_license_key: !!licenseKey,
     enforce_enabled: enforceEnabled,
   });
   toast('授权配置已保存');
   await loadLicenseStatus();
+}
+
+async function copyMachineCode() {
+  const text = document.getElementById('licenseMachineCode')?.value?.trim() || '';
+  if (!text) {
+    toast('机器码为空', true);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('机器码已复制');
+  } catch(e) {
+    toast('复制失败，请手动复制', true);
+  }
 }
 
 async function uploadLicenseFile() {
@@ -5246,55 +5229,11 @@ async function downloadMachineFile() {
     const blob = await resp.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'machine_id.json';
+    a.download = 'machine_code.json';
     a.click();
     URL.revokeObjectURL(a.href);
   } catch(e) {
     toast(e.message || '下载失败', true);
-  }
-}
-
-async function generateLicenseFile() {
-  const customer = document.getElementById('licenseGenCustomer')?.value.trim() || '';
-  const expiresRaw = document.getElementById('licenseGenExpiresAt')?.value || '';
-  const machineId = document.getElementById('licenseGenMachineId')?.value.trim() || '';
-  const featuresRaw = document.getElementById('licenseGenFeatures')?.value.trim() || '';
-  if (!customer) { toast('请填写客户名称', true); return; }
-  if (!expiresRaw) { toast('请选择到期时间', true); return; }
-  const expiresAt = new Date(expiresRaw).toISOString();
-  const features = featuresRaw ? featuresRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
-  try {
-    const token = getToken();
-    const resp = await fetch('/api/license/generate-file', {
-      method: 'POST',
-      headers: {
-        ...(token ? {'Authorization': 'Bearer ' + token} : {}),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        customer,
-        expires_at: expiresAt,
-        machine_id: machineId,
-        features
-      })
-    });
-    if (resp.status === 401) {
-      clearToken(); showLogin();
-      throw new Error('会话已过期，请重新登录');
-    }
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({detail: resp.statusText}));
-      throw new Error(err.detail || resp.statusText);
-    }
-    const blob = await resp.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'license.json';
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast('授权文件已生成');
-  } catch(e) {
-    toast(e.message || '生成失败', true);
   }
 }
 

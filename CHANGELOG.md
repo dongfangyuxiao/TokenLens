@@ -16,6 +16,13 @@
 - 参考 DVWA 官方漏洞模块目录补齐检查项，对齐 `api`、`authbypass`、`bac`、`cryptography`、`csp`、`open_redirect`、`weak_id` 等场景
 - 设置页与扫描触发弹窗新增多模型链配置与复核策略选择
 - 后端提示词补齐 open redirect、weak identifier 等易漏报项
+- 产品授权改为“机器码展示 + 授权文件导入”主流程，客户侧不再要求手工粘贴授权码
+- 产品授权管理端支持按客户机器码生成授权文件并下载
+- `/api/license-status` 新增 `machine_code` 返回字段，机器码导出文件同步改用 `machine_code`
+- 授权内部字段统一切换到 `license_token / machine_code`，移除旧的 `license_key / machine_id / instance_id` 管理入口
+- 新增授权管理台账：支持历史授权查询、状态统计、备注、吊销/恢复、重下载和删除
+- 授权签发与授权台账从代码审计系统中拆出，新增独立授权管理服务 `license_admin_app.py`
+- 新增 `deploy/systemd` 与 `deploy/nginx` 双服务部署样例，支持审计系统与授权系统分开上线
 
 ## 2026-03-27
 

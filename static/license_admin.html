@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>授权管理系统</title>
+  <style>
+    :root{--bg:#0b1220;--panel:#111a2e;--panel2:#18243d;--text:#e6edf7;--muted:#8ea3c0;--line:#233250;--accent:#4da3ff;--danger:#ff6b6b}
+    *{box-sizing:border-box} body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:linear-gradient(180deg,#09111f,#101a2d);color:var(--text)}
+    .wrap{max-width:1180px;margin:0 auto;padding:24px}
+    .card{background:rgba(17,26,46,.94);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 20px 60px rgba(0,0,0,.22)}
+    .hero{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:18px}
+    .title{font-size:28px;font-weight:800}.sub{color:var(--muted);margin-top:6px}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0}
+    .stat{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px}
+    .stat b{display:block;font-size:22px;margin-top:6px}
+    .row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .group{margin-bottom:12px}.group label{display:block;margin-bottom:6px;color:var(--muted)}
+    input,select,textarea{width:100%;background:#0c1527;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+    textarea{min-height:90px;resize:vertical}
+    button{border:0;border-radius:12px;padding:10px 14px;background:var(--accent);color:white;font-weight:700;cursor:pointer}
+    button.alt{background:#20314f} button.danger{background:var(--danger)} button:disabled{opacity:.6;cursor:not-allowed}
+    .actions{display:flex;gap:8px;flex-wrap:wrap}
+    table{width:100%;border-collapse:collapse;margin-top:12px} th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+    th{color:#a7b7cf;font-weight:700} .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+    .muted{color:var(--muted)} .hidden{display:none} .topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+    .login{max-width:420px;margin:10vh auto 0}.hint{margin-top:8px;color:var(--muted);font-size:12px}
+    @media (max-width: 900px){.grid,.row{grid-template-columns:1fr}.hero,.topbar{display:block}}
+  </style>
+</head>
+<body>
+  <div id="loginView" class="wrap login">
+    <div class="card">
+      <div class="title">授权管理系统</div>
+      <div class="sub">独立于代码审计系统，仅用于授权签发与授权台账管理。</div>
+      <div class="group"><label>用户名</label><input id="loginUser" autocomplete="username"></div>
+      <div class="group"><label>密码</label><input id="loginPass" type="password" autocomplete="current-password"></div>
+      <div class="actions"><button onclick="doLogin()">登录</button></div>
+      <div id="loginErr" class="hint"></div>
+    </div>
+  </div>
+
+  <div id="appView" class="wrap hidden">
+    <div class="hero">
+      <div>
+        <div class="title">授权管理台</div>
+        <div class="sub">签发授权文件、维护授权记录、执行吊销/恢复和重下载。</div>
+      </div>
+      <div class="actions">
+        <div class="muted" id="whoami">-</div>
+        <button class="alt" onclick="doLogout()">退出</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="row">
+        <div class="group"><label>客户名称</label><input id="customer" placeholder="如：Acme Corp"></div>
+        <div class="group"><label>到期时间</label><input id="expiresAt" type="datetime-local"></div>
+      </div>
+      <div class="row">
+        <div class="group"><label>客户机器码</label><textarea id="machineCode" placeholder="粘贴机器码，或直接粘贴机器码 JSON"></textarea></div>
+        <div class="group"><label>功能点（逗号分隔，可选）</label><input id="features" placeholder="poison_scan,incremental_audit,full_audit,instant_analysis"></div>
+      </div>
+      <div class="group"><label>备注（可选）</label><input id="remark" placeholder="项目名、合同号、负责人等"></div>
+      <div class="actions"><button onclick="generateLicense()">生成授权文件并下载</button></div>
+    </div>
+
+    <div class="card">
+      <div class="topbar">
+        <div class="actions">
+          <select id="statusFilter" onchange="loadRecords()">
+            <option value="">全部状态</option>
+            <option value="active">生效中</option>
+            <option value="revoked">已吊销</option>
+          </select>
+          <input id="keyword" placeholder="客户名 / 机器码 / 备注" onkeydown="if(event.key==='Enter') loadRecords()">
+          <button class="alt" onclick="loadRecords()">查询</button>
+        </div>
+        <div class="muted" id="summary">暂无数据</div>
+      </div>
+      <div id="records"></div>
+      <div class="hint">吊销仅影响后台台账和后续分发；已离线导入客户环境的授权文件不会被远程追溯失效。</div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let _token = localStorage.getItem('license_admin_token') || '';
+    let _records = [];
+
+    async function api(method, path, body, raw=false) {
+      const headers = {};
+      if (_token) headers['Authorization'] = 'Bearer ' + _token;
+      if (!raw) headers['Content-Type'] = 'application/json';
+      const resp = await fetch(path, {method, headers, body: body ? (raw ? body : JSON.stringify(body)) : undefined});
+      if (resp.status === 401) {
+        _token = ''; localStorage.removeItem('license_admin_token'); showLogin();
+        throw new Error('会话已过期，请重新登录');
+      }
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({detail: resp.statusText}));
+        throw new Error(err.detail || resp.statusText);
+      }
+      return resp;
+    }
+
+    function esc(s){return String(s ?? '').replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));}
+    function showLogin(){ $('loginView').classList.remove('hidden'); $('appView').classList.add('hidden'); }
+    function showApp(){ $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden'); }
+    function toast(msg){ alert(msg); }
+
+    async function doLogin() {
+      $('loginErr').textContent = '';
+      try {
+        const resp = await fetch('/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({username:$('loginUser').value.trim(), password:$('loginPass').value})});
+        if (!resp.ok) {
+          const err = await resp.json().catch(()=>({detail:resp.statusText}));
+          throw new Error(err.detail || '登录失败');
+        }
+        const data = await resp.json();
+        _token = data.token || '';
+        localStorage.setItem('license_admin_token', _token);
+        await bootstrap();
+      } catch (e) {
+        $('loginErr').textContent = e.message || '登录失败';
+      }
+    }
+
+    async function doLogout() {
+      if (_token) await fetch('/api/logout', {method:'POST', headers:{Authorization:'Bearer '+_token}}).catch(()=>{});
+      _token = ''; localStorage.removeItem('license_admin_token'); showLogin();
+    }
+
+    async function bootstrap() {
+      try {
+        const me = await (await api('GET', '/api/me')).json();
+        $('whoami').textContent = me.username || '-';
+        showApp();
+        await loadRecords();
+      } catch (e) {
+        showLogin();
+      }
+    }
+
+    async function generateLicense() {
+      const customer = $('customer').value.trim();
+      const expiresRaw = $('expiresAt').value || '';
+      const machineCode = $('machineCode').value.trim();
+      const features = $('features').value.trim() ? $('features').value.trim().split(',').map(s=>s.trim()).filter(Boolean) : [];
+      const remark = $('remark').value.trim();
+      if (!customer) return toast('请填写客户名称');
+      if (!expiresRaw) return toast('请选择到期时间');
+      if (!machineCode) return toast('请填写客户机器码');
+      try {
+        const resp = await api('POST', '/api/license/generate-file', {
+          customer,
+          expires_at: new Date(expiresRaw).toISOString(),
+          machine_code: machineCode,
+          features,
+          remark
+        });
+        const blob = await resp.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'license.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        await loadRecords();
+      } catch (e) {
+        toast(e.message || '生成失败');
+      }
+    }
+
+    async function loadRecords() {
+      try {
+        const status = $('statusFilter').value;
+        const keyword = $('keyword').value.trim();
+        const [summaryResp, listResp] = await Promise.all([
+          api('GET', '/api/license-records/summary'),
+          api('GET', `/api/license-records?status=${encodeURIComponent(status)}&keyword=${encodeURIComponent(keyword)}&limit=200`)
+        ]);
+        const summary = await summaryResp.json();
+        _records = await listResp.json();
+        $('summary').textContent = `总数 ${summary.total_count || 0}，生效 ${summary.active_count || 0}，已吊销 ${summary.revoked_count || 0}，已过期 ${summary.expired_count || 0}`;
+        if (!_records.length) {
+          $('records').innerHTML = '<div class="muted">暂无授权记录</div>';
+          return;
+        }
+        $('records').innerHTML = `<table>
+          <thead><tr><th>ID</th><th>客户</th><th>机器码</th><th>到期时间</th><th>功能点</th><th>状态</th><th>下载</th><th>备注</th><th>操作</th></tr></thead>
+          <tbody>${_records.map(x => `
+            <tr>
+              <td>${esc(x.id)}</td>
+              <td><div><b>${esc(x.customer)}</b></div><div class="muted">${esc(x.created_by || '-')} · ${esc(x.created_at || '-')}</div></td>
+              <td class="mono">${esc(x.machine_code || '-')}</td>
+              <td>${esc(x.expires_at || '-')}</td>
+              <td>${esc((x.features || []).join(', ') || '未限制')}</td>
+              <td>${esc(x.effective_status === 'expired' ? '已过期' : (x.record_status === 'revoked' ? '已吊销' : '生效中'))}</td>
+              <td>${esc(x.download_count || 0)}</td>
+              <td>${esc(x.remark || '-')}</td>
+              <td class="actions">
+                <button class="alt" onclick="downloadRecord(${x.id})">下载</button>
+                <button class="alt" onclick="editRemark(${x.id})">备注</button>
+                <button class="alt" onclick="changeStatus(${x.id}, '${x.record_status === 'revoked' ? 'active' : 'revoked'}')">${x.record_status === 'revoked' ? '恢复' : '吊销'}</button>
+                <button class="danger" onclick="deleteRecord(${x.id})">删除</button>
+              </td>
+            </tr>
+          `).join('')}</tbody></table>`;
+      } catch (e) {
+        $('records').innerHTML = `<div class="muted">${esc(e.message || '加载失败')}</div>`;
+      }
+    }
+
+    async function downloadRecord(id) {
+      try {
+        const resp = await api('GET', `/api/license-records/${id}/download`);
+        const blob = await resp.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `license_${id}.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        await loadRecords();
+      } catch (e) { toast(e.message || '下载失败'); }
+    }
+
+    async function editRemark(id) {
+      const item = _records.find(x => Number(x.id) === Number(id)) || {};
+      const remark = window.prompt('请输入备注', item.remark || '');
+      if (remark === null) return;
+      try {
+        await api('PATCH', `/api/license-records/${id}`, {remark});
+        await loadRecords();
+      } catch (e) { toast(e.message || '更新失败'); }
+    }
+
+    async function changeStatus(id, status) {
+      if (!window.confirm(status === 'revoked' ? '确认吊销这条授权记录？' : '确认恢复这条授权记录？')) return;
+      try {
+        await api('PATCH', `/api/license-records/${id}`, {record_status: status});
+        await loadRecords();
+      } catch (e) { toast(e.message || '更新失败'); }
+    }
+
+    async function deleteRecord(id) {
+      if (!window.confirm('确认删除这条授权记录？')) return;
+      try {
+        await api('DELETE', `/api/license-records/${id}`);
+        await loadRecords();
+      } catch (e) { toast(e.message || '删除失败'); }
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>

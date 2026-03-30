@@ -38,7 +38,7 @@
 - 全量审计新增主分支快照同步：每次 full audit 会将各仓库 `main/master` 同步到本地 `synced_repos/`
 - 新增软件成分分析（SCA）组件清单入库，支持按组件/仓库/来源查询
 - 新增应急排查能力：支持恶意依赖全仓检测、支持全代码库关键词模糊检索（如 `swagger.html`）
-- 新增产品授权能力，支持授权码签发、实例 ID 绑定、后台录入与状态校验
+- 新增产品授权能力，支持机器码展示、授权文件签发、导入与状态校验
 - 新增授权临期提醒、顶部授权状态胶囊、右下角授权水印和按功能点控制能力
 - 修复启动时误删指定管理员账户的硬编码逻辑
 - 修复管理员删除接口错误提示不准确的问题
@@ -219,8 +219,8 @@ pre-commit run --all-files
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `BASE_URL` | 报告链接前缀，用于通知消息中的跳转地址 | `http://localhost:8000` |
-| `LICENSE_SECRET` | 产品授权签名密钥，生成与校验授权码时必须一致 | `springstillness-dev-license-secret` |
-| `PRODUCT_INSTANCE_ID` | 手工指定当前实例 ID；不设置时自动按主机信息生成 | 自动生成 |
+| `LICENSE_SECRET` | 产品授权签名密钥，生成与校验授权文件中的 `license_token` 时必须一致 | `springstillness-dev-license-secret` |
+| `PRODUCT_INSTANCE_ID` | 手工指定当前机器码；不设置时自动按主机信息生成 | 自动生成 |
 | `DB_PATH` | SQLite 数据库文件路径 | `audit.db` |
 | `REPORTS_DIR` | 报告目录（`/reports` 静态映射来源） | `reports` |
 | `SYNC_ROOT` | 全量快照同步目录 | `synced_repos` |
@@ -230,10 +230,52 @@ pre-commit run --all-files
 
 ## 产品授权
 
-当前版本已内置授权配置、签名校验和实例绑定能力，但默认 **不启用拦截**。  
-你可以先在 **系统设置 → 产品授权** 中录入授权码并验证状态，待联调完成后再开启授权校验。
+当前版本已内置基于 **机器码 + 授权文件** 的授权机制，但默认 **不启用拦截**。  
+代码审计系统仅保留客户侧授权动作：查看机器码、下载机器码文件、导入授权文件、开启本地授权校验。  
+授权签发与授权台账已拆分为独立系统，需单独启动授权管理服务。
 
-### 生成授权码
+### 服务拆分
+
+- 代码审计系统：`uvicorn app:app --host 0.0.0.0 --port 8000`
+- 授权管理系统：`uvicorn license_admin_app:app --host 0.0.0.0 --port 8001`
+
+建议部署方式：
+- 客户使用 `http://审计系统地址:8000`
+- 内部授权人员使用 `http://授权管理地址:8001`
+- 两个系统可共用同一个数据库文件，用于共享授权记录与管理员账号
+
+### 生产部署示例
+
+仓库已提供可直接改造的部署样例：
+
+- `deploy/systemd/springstillness-audit.service`
+- `deploy/systemd/springstillness-license-admin.service`
+- `deploy/nginx/springstillness.conf`
+
+推荐部署步骤：
+
+1. 将项目放到 `/opt/springstillness`
+2. 按实际域名修改 `deploy/nginx/springstillness.conf`
+3. 按实际路径和环境变量修改两个 `systemd` service 文件
+4. 启动两个服务
+
+```bash
+sudo cp deploy/systemd/springstillness-audit.service /etc/systemd/system/
+sudo cp deploy/systemd/springstillness-license-admin.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now springstillness-audit
+sudo systemctl enable --now springstillness-license-admin
+```
+
+5. 加载 Nginx 配置
+
+```bash
+sudo cp deploy/nginx/springstillness.conf /etc/nginx/conf.d/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 在独立授权管理系统中生成授权文件
 
 先设置签名密钥：
 
@@ -241,37 +283,13 @@ pre-commit run --all-files
 export LICENSE_SECRET='replace-with-your-secret'
 ```
 
-生成一个不绑定机器的授权码：
-
-```bash
-python3 license_manager.py generate \
-  --customer 'Acme Corp' \
-  --expires-at '2027-12-31T23:59:59Z'
-```
-
-生成一个绑定指定实例 ID 的授权码：
-
-```bash
-python3 license_manager.py generate \
-  --customer 'Acme Corp' \
-  --expires-at '2027-12-31T23:59:59Z' \
-  --machine-id '粘贴系统设置页里的实例 ID'
-```
-
-可重复追加 `--feature` 写入功能点，例如 `--feature full_audit --feature instant_analysis`。
-若不传 `--feature`，则默认表示授权不限制功能点。
-
-### 生成授权文件（推荐）
-
-系统设置已支持“上传授权文件”。
-
-先在目标部署机器的 **系统设置 → 产品授权** 下载机器码文件，或复制实例 ID，然后在签发环境执行：
+先在目标部署机器的 **系统设置 → 产品授权** 下载机器码文件，或复制机器码，然后在授权管理系统或签发环境执行：
 
 ```bash
 python3 license_manager.py generate-file \
   --customer 'Acme Corp' \
   --expires-at '2027-12-31T23:59:59Z' \
-  --machine-id '目标机器实例ID' \
+  --machine-code '目标机器码' \
   --feature poison_scan \
   --feature incremental_audit \
   --feature full_audit \
@@ -281,12 +299,30 @@ python3 license_manager.py generate-file \
 
 将生成的 `license_acme.json` 在系统设置中上传即可生效。
 
-### 校验授权码
+可重复追加 `--feature` 写入功能点，例如 `--feature full_audit --feature instant_analysis`。  
+若不传 `--feature`，则默认表示授权不限制功能点。
+
+### 独立授权后台管理
+
+独立授权管理系统不只支持生成授权文件，还支持：
+
+- 查看已签发授权台账
+- 按客户名 / 机器码 / 备注检索
+- 查看生效、吊销、过期统计
+- 记录签发人、签发时间、下载次数
+- 修改备注
+- 吊销 / 恢复后台记录
+- 重新下载历史授权文件
+- 删除不再需要的后台记录
+
+说明：吊销仅影响后台台账和后续分发管理；已经离线导入客户环境的授权文件不会被远程追溯失效。
+
+### 校验授权文件
 
 ```bash
-python3 license_manager.py verify \
-  --license-key '粘贴授权码' \
-  --machine-id '粘贴系统设置页里的实例 ID'
+python3 license_manager.py verify-file \
+  --license-file ./license_acme.json \
+  --machine-code '粘贴系统设置页里的机器码'
 ```
 
 推荐功能点：
