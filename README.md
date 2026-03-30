@@ -6,6 +6,19 @@
 
 ## 最近更新
 
+### 2026-03-30
+
+- 新增多模型交叉审计链：手动触发、计划任务、历史重跑均支持同时绑定多个 `llm_profile_ids`
+- 新增交叉审计策略 `single / any / majority / all`，可实现 “DeepSeek 初审 + GPT 复核 + Claude 验证” 组合，降低误报
+- `analyzer.py` 支持多模型逐文件复核与跨文件复核，并按共识策略合并结果
+- 多模型非单模型策略下，系统会把共识确认过的结果自动沉淀为 adaptive skills，并在后续同类语言/任务扫描中注入 prompt
+- 当使用 `majority / all` 时，系统还会学习“被多数模型否决”的低可信模式，后续自动压制这类弱证据误报
+- AI 配置新增勾选项“启用多模型联合校验后自动优化 skills”，只有勾选该选项的模型参与联合校验时才会触发 skills 自动调整
+- 内置提示词新增 `Java Security` 与 `PHP Security` 两套语言专项 skills，与现有前端/后端/合约模板协同工作
+- 参考 DVWA 官方模块目录补齐能力项，对齐 `authbypass / bac / cryptography / csp / open_redirect / weak_id / api` 等场景
+- 扫描计划页和手动触发弹窗已支持多模型链与复核策略配置
+- 扫描记录与计划任务表结构新增 `llm_profile_ids`、`llm_consensus_mode`，兼容旧版 `llm_profile_id`
+
 ### 2026-03-27
 
 - 即时分析（粘贴/上传）支持选择 AI 模型；上传接口鉴权已修复，避免会话误判失效
@@ -66,6 +79,13 @@
 
 无 LLM 配置时自动降级为 Semgrep + OpenSCA 静态扫描。
 
+**多模型交叉审计**
+- 支持在投毒检测、增量审计、全量审计中为一次任务绑定多个模型配置
+- 支持 `single / any / majority / all` 四种复核策略
+- 典型组合：`DeepSeek` 初审，`OpenAI GPT` 复核，`Claude` 终审
+- 单文件分析与跨文件联合分析都会走同一套共识合并逻辑
+- 当使用多模型且策略不是 `single` 时，共识确认的真实结果会自动学习为 adaptive skills，后续相同语言扫描会优先关注这些模式
+
 **即时告警与通知**
 - 钉钉（支持签名验证）
 - 飞书 / 企业微信
@@ -82,7 +102,40 @@
 登录、扫描、漏洞发现等关键事件实时转发至外部 Syslog 服务器（支持 UDP / TCP），便于接入 SIEM。
 
 **自定义 Prompt**
-内置前端、后端、通用安全审计提示词，支持按文件扩展名匹配，可在 Web 界面自由编辑或新增。
+内置 Frontend、Backend、Smart Contract、Java Security、PHP Security 五类提示词，支持按文件扩展名匹配，可在 Web 界面自由编辑或新增。
+
+## DVWA 基准对照
+
+参考 DVWA 官方仓库 `vulnerabilities/` 目录，当前公开模块至少包括：
+
+- `api`
+- `authbypass`
+- `bac`
+- `brute`
+- `captcha`
+- `cryptography`
+- `csp`
+- `csrf`
+- `exec`
+- `fi`
+- `javascript`
+- `open_redirect`
+- `sqli`
+- `sqli_blind`
+- `upload`
+- `weak_id`
+- `xss_d`
+- `xss_r`
+- `xss_s`
+
+基于这组基准，本项目本次调整了默认 skills / prompts：
+
+- 后端提示词补齐 `open redirect`、`weak identifier`、API/BAC 相关检查点
+- 前端提示词继续覆盖 `csp`、`javascript`、`open redirect`、`xss_*`
+- PHP 专项提示词补齐 `fi`、`upload`、`exec`、`open redirect`
+- Java 专项提示词补齐 `authbypass`、`bac`、`cryptography`、`xxe`、`deserialization`
+
+如果要验证“DVWA 是否都能审出来”，建议把 DVWA 仓库本身接入平台后跑一次 `full_audit`，再按模块做召回率核对。当前仓库内没有 DVWA 扫描结果，因此这里完成的是能力对照，不是样本实测召回。
 
 ## 技术架构
 

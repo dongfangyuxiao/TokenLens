@@ -1,5 +1,22 @@
 # 更新日志
 
+## 2026-03-30
+
+### 📌 今日同步摘要
+
+- 新增多模型交叉审计链：手动触发、计划任务、历史重跑均支持 `llm_profile_ids`
+- 新增四种复核策略：`single / any / majority / all`
+- `analyzer.py` 支持多模型逐文件复核与跨文件复核，并按共识策略合并审计结果
+- 新增 adaptive skills 自学习：多模型共识确认的结果会按语言和任务沉淀，并在后续 prompt 中自动增强
+- 新增负向 adaptive skills：`majority / all` 下被多数模型否决的低可信模式也会沉淀，用于后续自动压制误报
+- AI 配置表单新增“启用多模型联合校验后自动优化 skills”勾选项，开启后该模型参与联合校验时会自动调整 skills
+- `scan_schedules` 与 `scans` 表新增 `llm_profile_ids`、`llm_consensus_mode` 字段，保留旧版 `llm_profile_id` 兼容
+- 新增 `adaptive_skills` 表与 `/api/adaptive-skills` 接口，用于查看自动优化后的 skills
+- 系统内置新增 `Java Security`、`PHP Security` 两套语言专项 skills / prompts
+- 参考 DVWA 官方漏洞模块目录补齐检查项，对齐 `api`、`authbypass`、`bac`、`cryptography`、`csp`、`open_redirect`、`weak_id` 等场景
+- 设置页与扫描触发弹窗新增多模型链配置与复核策略选择
+- 后端提示词补齐 open redirect、weak identifier 等易漏报项
+
 ## 2026-03-27
 
 ### 📌 今日同步摘要

@@ -245,7 +245,8 @@ def _require_license_if_enabled(feature: str = ''):
         raise HTTPException(403, f'当前授权未开通：{_FEATURE_LABELS.get(feature, feature)}')
     return status
 
-def _run_in_thread(scan_type: str, llm_profile_id=None):
+def _run_in_thread(scan_type: str, llm_profile_id=None, llm_profile_ids=None,
+                   llm_consensus_mode='single'):
     """在新线程中执行扫描，持有 _scan_lock。"""
     if not _scan_lock.acquire(blocking=False):
         print('[scheduler] 上次扫描未结束，跳过')
@@ -257,10 +258,57 @@ def _run_in_thread(scan_type: str, llm_profile_id=None):
         run_scan(BASE_URL, scan_type=scan_type,
                  stop_event=_stop_event, pause_event=_pause_event,
                  llm_profile_id=llm_profile_id,
+                 llm_profile_ids=llm_profile_ids,
+                 llm_consensus_mode=llm_consensus_mode,
                  progress_cb=_set_scan_progress)
     finally:
         _scan_lock.release()
         _set_scan_progress(0, 'idle', '')
+
+_VALID_CONSENSUS_MODES = {'single', 'any', 'majority', 'all'}
+
+def _normalize_profile_ids(profile_ids, llm_profile_id=None):
+    if isinstance(profile_ids, str):
+        try:
+            profile_ids = json.loads(profile_ids or '[]')
+        except Exception:
+            profile_ids = []
+    ids = []
+    for raw in profile_ids or []:
+        try:
+            val = int(raw)
+        except Exception:
+            continue
+        if val > 0 and val not in ids:
+            ids.append(val)
+    if not ids and llm_profile_id:
+        try:
+            val = int(llm_profile_id)
+            if val > 0:
+                ids.append(val)
+        except Exception:
+            pass
+    return ids
+
+def _normalize_consensus_mode(mode: str, profile_ids: list[int]):
+    m = (mode or '').strip().lower() or 'single'
+    if len(profile_ids) <= 1:
+        return 'single'
+    return m if m in _VALID_CONSENSUS_MODES else 'majority'
+
+def _scan_kwargs_from_target(target: dict):
+    profile_ids = _normalize_profile_ids(
+        target.get('llm_profile_ids') or [],
+        target.get('llm_profile_id')
+    )
+    return {
+        'llm_profile_id': profile_ids[0] if profile_ids else target.get('llm_profile_id'),
+        'llm_profile_ids': profile_ids,
+        'llm_consensus_mode': _normalize_consensus_mode(
+            target.get('llm_consensus_mode', 'single'),
+            profile_ids,
+        ),
+    }
 
 def _reschedule():
     scheduler.remove_all_jobs()
@@ -269,12 +317,17 @@ def _reschedule():
             continue
         if s['type'] not in {'poison', 'incremental_audit', 'full_audit'}:
             continue
-        scan_type      = s['type']
-        llm_profile_id = s.get('llm_profile_id')
+        scan_type = s['type']
+        scan_cfg  = _scan_kwargs_from_target(s)
         h  = s['hour']
         m  = s['minute']
         wd = s.get('weekday')
-        fn = lambda st=scan_type, lpid=llm_profile_id: _run_in_thread(st, lpid)
+        fn = lambda st=scan_type, cfg=scan_cfg: _run_in_thread(
+            st,
+            cfg.get('llm_profile_id'),
+            cfg.get('llm_profile_ids'),
+            cfg.get('llm_consensus_mode', 'single'),
+        )
         if h == -1:
             scheduler.add_job(fn, 'cron', hour='*', minute=m, id=f"sched_{s['id']}")
             print(f"[scheduler] {scan_type} #{s['id']}: 每小时第 {m:02d} 分")
@@ -503,11 +556,12 @@ def test_channel_api(cid: int, _: str = Depends(require_auth)):
 # ── LLM 配置 API ─────────────────────────────────────────────────
 # ── LLM 配置列表 API ──────────────────────────────────────────────
 class LLMProfileIn(BaseModel):
-    name    : str
-    provider: str
-    model   : str = ''
-    api_key : str = ''
-    base_url: str = ''
+    name                : str
+    provider            : str
+    model               : str = ''
+    api_key             : str = ''
+    base_url            : str = ''
+    auto_optimize_skills: bool = False
 
 @app.get('/api/llm-profiles')
 def list_llm_profiles(_: str = Depends(require_auth)):
@@ -518,13 +572,17 @@ def add_llm_profile(body: LLMProfileIn, _: str = Depends(require_auth)):
     if not body.name.strip() or not body.provider.strip():
         raise HTTPException(400, '名称和提供商不能为空')
     pid = db.add_llm_profile(body.name.strip(), body.provider, body.model, body.api_key, body.base_url)
+    db.set_llm_profile_auto_optimize(pid, body.auto_optimize_skills)
     return {'ok': True, 'id': pid}
 
 @app.put('/api/llm-profiles/{pid}')
 def update_llm_profile(pid: int, body: LLMProfileIn, _: str = Depends(require_auth)):
     if not db.get_llm_profile(pid):
         raise HTTPException(404, '配置不存在')
-    db.update_llm_profile(pid, body.name.strip(), body.provider, body.model, body.api_key, body.base_url)
+    db.update_llm_profile(
+        pid, body.name.strip(), body.provider, body.model,
+        body.api_key, body.base_url, body.auto_optimize_skills
+    )
     return {'ok': True}
 
 @app.delete('/api/llm-profiles/{pid}')
@@ -714,12 +772,14 @@ def generate_license_file(body: LicenseGenerateIn, _: str = Depends(require_auth
 _VALID_TYPES = {'poison', 'incremental_audit', 'full_audit'}
 
 class ScanScheduleIn(BaseModel):
-    type          : str
-    hour          : int          # -1 = 每小时
-    minute        : int = 0
-    weekday       : int = None   # None=每天, 0-6=指定星期
-    label         : str = ''
-    llm_profile_id: int = None
+    type              : str
+    hour              : int          # -1 = 每小时
+    minute            : int = 0
+    weekday           : int = None   # None=每天, 0-6=指定星期
+    label             : str = ''
+    llm_profile_id    : int = None
+    llm_profile_ids   : List[int] = []
+    llm_consensus_mode: str = 'single'
 
 @app.get('/api/scan-schedules')
 def list_scan_schedules(_: str = Depends(require_auth)):
@@ -735,8 +795,12 @@ def add_scan_schedule(body: ScanScheduleIn, _: str = Depends(require_auth)):
         raise HTTPException(400, '分钟必须在 0-59 之间')
     if body.weekday is not None and not (0 <= body.weekday <= 6):
         raise HTTPException(400, '星期必须在 0-6 之间')
+    profile_ids = _normalize_profile_ids(body.llm_profile_ids, body.llm_profile_id)
+    consensus_mode = _normalize_consensus_mode(body.llm_consensus_mode, profile_ids)
     sid = db.add_scan_schedule(body.type, body.hour, body.minute,
-                               body.weekday, body.label.strip(), body.llm_profile_id)
+                               body.weekday, body.label.strip(),
+                               profile_ids[0] if profile_ids else body.llm_profile_id,
+                               profile_ids, consensus_mode)
     _reschedule()
     return {'ok': True, 'id': sid}
 
@@ -760,11 +824,13 @@ _SCAN_TYPE_LABELS = {
 }
 
 class ScanTrigger(BaseModel):
-    scan_type     : str  = 'incremental_audit'
-    llm_profile_id: int  = None
-    selected_sources: List[str] = []
+    scan_type          : str  = 'incremental_audit'
+    llm_profile_id     : int  = None
+    llm_profile_ids    : List[int] = []
+    llm_consensus_mode : str = 'single'
+    selected_sources   : List[str] = []
     # 旧版兼容
-    full_scan     : bool = False
+    full_scan          : bool = False
 
 @app.post('/api/scan/trigger')
 def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(require_auth)):
@@ -782,13 +848,17 @@ def trigger_scan(body: ScanTrigger = ScanTrigger(), operator: str = Depends(requ
     _set_scan_progress(0, 'starting', f'{scan_type} starting')
     label = _SCAN_TYPE_LABELS[scan_type]
     syslog.send('info', 'SCAN', f'{label}由 {operator} 触发')
-    llm_profile_id = body.llm_profile_id
+    profile_ids = _normalize_profile_ids(body.llm_profile_ids, body.llm_profile_id)
+    llm_profile_id = profile_ids[0] if profile_ids else body.llm_profile_id
+    llm_consensus_mode = _normalize_consensus_mode(body.llm_consensus_mode, profile_ids)
     selected_sources = body.selected_sources or []
     def _run():
         try:
             run_scan(BASE_URL, scan_type=scan_type,
                      stop_event=_stop_event, pause_event=_pause_event,
                      manual=True, llm_profile_id=llm_profile_id,
+                     llm_profile_ids=profile_ids,
+                     llm_consensus_mode=llm_consensus_mode,
                      selected_sources=selected_sources,
                      progress_cb=_set_scan_progress)
         finally:
@@ -870,13 +940,16 @@ def rerun_scan(scan_id: int, operator: str = Depends(require_auth)):
     _pause_event.set()
     _set_scan_progress(0, 'starting', f'{scan_type} rerun starting')
     label          = _SCAN_TYPE_LABELS.get(scan_type, scan_type)
-    llm_profile_id = target.get('llm_profile_id')
+    scan_cfg = _scan_kwargs_from_target(target)
     syslog.send('info', 'SCAN', f'{label}（重新运行 #{scan_id}）由 {operator} 触发')
     def _run():
         try:
             run_scan(BASE_URL, scan_type=scan_type,
                      stop_event=_stop_event, pause_event=_pause_event,
-                     manual=True, llm_profile_id=llm_profile_id,
+                     manual=True,
+                     llm_profile_id=scan_cfg.get('llm_profile_id'),
+                     llm_profile_ids=scan_cfg.get('llm_profile_ids'),
+                     llm_consensus_mode=scan_cfg.get('llm_consensus_mode', 'single'),
                      progress_cb=_set_scan_progress)
         finally:
             _scan_lock.release()
@@ -1131,6 +1204,16 @@ class PromptIn(BaseModel):
 @app.get('/api/prompts')
 def list_prompts(_: str = Depends(require_auth)):
     return db.get_prompts()
+
+@app.get('/api/adaptive-skills')
+def list_adaptive_skills(scan_type: str = '', language_key: str = '', skill_type: str = '',
+                         limit: int = 200, _: str = Depends(require_auth)):
+    return db.get_adaptive_skills(
+        scan_type=scan_type,
+        language_key=language_key,
+        skill_type=skill_type,
+        limit=limit,
+    )
 
 @app.post('/api/prompts')
 def create_prompt(body: PromptIn, _: str = Depends(require_auth)):

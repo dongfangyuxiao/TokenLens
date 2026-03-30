@@ -89,6 +89,8 @@ def _check(stop_event, pause_event):
 
 def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
             stop_event=None, pause_event=None, manual=False, llm_profile_id=None,
+            llm_profile_ids=None, llm_consensus_mode='single',
+            auto_optimize_skills=False,
             selected_sources=None,
             progress_cb=None):
     """
@@ -102,7 +104,12 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
     if full_scan and scan_type == 'incremental_audit':
         scan_type = 'full_audit'
 
-    scan_id = db.create_scan(scan_type=scan_type, llm_profile_id=llm_profile_id)
+    scan_id = db.create_scan(
+        scan_type=scan_type,
+        llm_profile_id=llm_profile_id,
+        llm_profile_ids=llm_profile_ids,
+        llm_consensus_mode=llm_consensus_mode,
+    )
 
     _MODE_LABELS = {
         'poison'           : '增量扫描(投毒/供应链)',
@@ -150,16 +157,23 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
             if skipped_accounts:
                 log('info', f'代码平台过滤已跳过 {skipped_accounts} 个账户')
             log('info', f'本次扫描平台过滤: {", ".join(sorted(source_filters))}')
-        if llm_profile_id:
-            _profile = db.get_llm_profile(llm_profile_id)
-            llm_cfg  = {
-                'provider': _profile['provider'],
-                'model':    _profile['model'],
-                'api_key':  _profile['api_key'],
-                'base_url': _profile['base_url'],
-            } if _profile else db.get_llm_config()
+        selected_profile_ids = [int(x) for x in (llm_profile_ids or []) if str(x).strip()]
+        if not selected_profile_ids and llm_profile_id:
+            selected_profile_ids = [int(llm_profile_id)]
+        if selected_profile_ids:
+            profiles = db.get_llm_profiles_by_ids(selected_profile_ids)
+            llm_cfgs = [{
+                'provider': p['provider'],
+                'model':    p['model'],
+                'api_key':  p['api_key'],
+                'base_url': p['base_url'],
+            } for p in profiles]
+            auto_optimize_skills = auto_optimize_skills or any(
+                int(p.get('auto_optimize_skills') or 0) == 1 for p in profiles
+            )
         else:
-            llm_cfg = db.get_llm_config()
+            llm_cfgs = [db.get_llm_config()]
+        llm_cfg = llm_cfgs[0] if llm_cfgs else {}
         app_cfg    = db.get_app_config()
         channels   = db.get_channels()
         whitelist  = db.get_whitelist_set()
@@ -189,6 +203,9 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
         # 打印当前使用的 LLM 提供商
         provider = llm_cfg.get('provider', '')
         log('info', f'LLM 提供商: {provider or "未配置（使用静态扫描）"}')
+        if selected_profile_ids:
+            log('info', f'交叉审计链: {selected_profile_ids} / mode={llm_consensus_mode}')
+            log('info', f'自动优化 skills: {"开启" if auto_optimize_skills else "关闭"}')
         if whitelist:
             log('info', f'白名单条目: {len(whitelist)} 条')
 
@@ -292,6 +309,7 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
                     findings = analyze_commit(
                         commit,
                         llm_cfg=llm_cfg,
+                        llm_cfgs=llm_cfgs,
                         max_diff_chars=max_diff,
                         prompts=prompts,
                         opensca_token=opensca_token,
@@ -299,6 +317,8 @@ def run_scan(base_url='', scan_type='incremental_audit', full_scan=False,
                         added_only=_added_only,
                         scan_type=scan_type,
                         stop_event=stop_event,
+                        llm_consensus_mode=llm_consensus_mode,
+                        auto_optimize_skills=auto_optimize_skills,
                     )
                 except LLMQuotaExhausted as e:
                     log('error', f'\n⚠️  API Key 额度已耗尽，扫描自动暂停！请充值后手动恢复。\n    原因: {e}')

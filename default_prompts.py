@@ -46,7 +46,7 @@ Audit checklist:
 7. SSRF: URL parameters triggering internal requests (webhook handlers, image fetchers, URL preview); cloud metadata endpoint access (169.254.169.254, fd00:ec2::254); DNS rebinding to bypass IP blocklists; dangerous protocol handlers (file://, dict://, gopher://, ftp://)
 8. File Operations: path traversal (../); unrestricted file upload (missing extension / MIME type / magic byte validation); upload directory directly web-accessible; insecure deserialization (Java ObjectInputStream, Python pickle/yaml.load(Loader=None), PHP unserialize, node-serialize)
 9. CSRF: missing CSRF token on state-changing endpoints; CORS Access-Control-Allow-Credentials:true with wildcard or reflected origin; JSON API relying solely on Content-Type check (bypassable)
-10. Business Logic: negative amounts / zero-price orders; non-atomic coupon/point redemption (double-spend race); state machine bypass (skip approval steps to reach final state); enumerable resource IDs / phone numbers / emails; race conditions / TOCTOU (inventory not atomically decremented)
+10. Business Logic: negative amounts / zero-price orders; non-atomic coupon/point redemption (double-spend race); state machine bypass (skip approval steps to reach final state); enumerable or predictable resource IDs / weak identifier schemes; open redirect on redirect/login/continue parameters; race conditions / TOCTOU (inventory not atomically decremented)
 11. Rate Limiting: no brute force protection on login / SMS / email / OTP endpoints
 12. Supply Chain Poisoning: backdoors; obfuscated logic; unexpected outbound network requests; malicious or typosquatted dependencies; data exfiltration routines; suspicious system calls
 
@@ -76,6 +76,52 @@ Audit checklist:
 10. DeFi Business Logic: zero or user-settable slippage (minAmountOut=0); liquidation boundary precision errors; rewardPerToken calculation precision; claim-after-withdraw reward bypass; ERC4626 vault inflation attack (first depositor share manipulation); governance flash loan voting attack; AMM single-block price manipulation
 11. ERC Standards Compliance: unchecked ERC20 transfer/transferFrom return values; ERC20 approve race condition (set to 0 before changing); ERC721 safeTransferFrom reentrancy via onERC721Received; fee-on-transfer token actual received amount vs transferred amount; rebasing token balance accounting; ERC4626 share inflation
 12. Contract Poisoning: hidden mint/burn/fee backdoors; rug pull drain mechanisms; concealed selfdestruct; obfuscated owner privilege escalation; logic obfuscation hiding malicious paths; unauthorized fund extraction
+
+Report only real risks. Return empty findings array if no issues found.
+Respond with strict JSON only, no other text:
+{{"findings":[{{"type":"vulnerability or poisoning","severity":"critical or high or medium or low","title":"short title","description":"detailed description","line":"line number or null","recommendation":"fix recommendation"}}],"summary":"one-sentence summary"}}"""
+
+JAVA_PROMPT = """You are a senior Java application security engineer. Audit the following Java/JSP code change (diff) for real security vulnerabilities and supply chain poisoning.
+
+File: {filename}
+Commit: {message}
+
+```diff
+{diff}
+```
+
+Audit checklist:
+1. Injection: JDBC string concatenation; MyBatis ${{}}; JPA nativeQuery/raw SQL; Runtime.exec/ProcessBuilder command injection; XPath/LDAP/SpEL/OGNL/Template injection
+2. Deserialization & RCE: ObjectInputStream, XMLDecoder, Hessian, SnakeYAML unsafe load, Fastjson autoType, Jackson default typing, Spring expression evaluation
+3. SSRF & XXE: RestTemplate/WebClient/HttpClient fetching user-controlled URLs; metadata endpoint access; DocumentBuilderFactory/SAX/TransformerFactory XXE hardening missing
+4. Auth & Access Control: missing Spring Security annotations/interceptors; IDOR; admin endpoints exposed; JWT validation gaps; insecure remember-me/session handling
+5. File & Path Risks: Multipart upload validation missing; path traversal in File/Paths/Resource access; ZIP slip; webroot upload
+6. Spring-specific issues: actuator exposure; @RequestBody mass assignment to privileged fields; CORS misconfig; CSRF disabled on cookie-auth endpoints; redirect/open redirect issues
+7. Sensitive Data & Crypto: hardcoded secrets in application.yml/properties; weak password hashing; ECB/predictable IV; insecure random token generation
+8. Build & Supply Chain: malicious Gradle/Maven plugins; suspicious post-build scripts; dependency confusion; obfuscated class loading; hidden outbound network calls
+
+Report only real risks. Return empty findings array if no issues found.
+Respond with strict JSON only, no other text:
+{{"findings":[{{"type":"vulnerability or poisoning","severity":"critical or high or medium or low","title":"short title","description":"detailed description","line":"line number or null","recommendation":"fix recommendation"}}],"summary":"one-sentence summary"}}"""
+
+PHP_PROMPT = """You are a senior PHP application security engineer. Audit the following PHP code change (diff) for real security vulnerabilities and supply chain poisoning.
+
+File: {filename}
+Commit: {message}
+
+```diff
+{diff}
+```
+
+Audit checklist:
+1. Injection: SQL injection in mysqli/PDO/raw query builders; command injection in exec/system/shell_exec/passthru/proc_open; template injection; header injection
+2. File Inclusion & RCE: include/require with user input; unserialize/object injection; Phar deserialization; eval/assert/create_function usage; dangerous dynamic function calls
+3. Auth & Session: weak session fixation protections; missing authorization checks; Laravel/Symfony route middleware gaps; JWT/cookie misconfiguration
+4. File Risks: upload validation missing; webshell upload; path traversal in file_get_contents/readfile/fopen; ZIP extraction risks
+5. XSS, SSRF & Redirect: reflected/stored XSS via echo/blade/raw output; cURL or stream wrappers fetching user-controlled URLs; internal host access; open redirect via header()/redirect helpers/user-controlled return URLs
+6. Mass Assignment: Laravel fillable/guarded mistakes; user-controlled role/is_admin/balance fields written directly
+7. Sensitive Data & Crypto: hardcoded APP_KEY/passwords/tokens; weak hashing or custom crypto; insecure random token generation
+8. Composer & Supply Chain: malicious Composer scripts/plugins; typosquatted packages; obfuscated payloads; hidden outbound callbacks or backdoors
 
 Report only real risks. Return empty findings array if no issues found.
 Respond with strict JSON only, no other text:

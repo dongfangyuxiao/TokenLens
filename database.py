@@ -4,7 +4,13 @@ import hashlib
 import os
 import binascii
 from datetime import datetime, date, timedelta
-from default_prompts import FRONTEND_PROMPT, BACKEND_PROMPT, CONTRACT_PROMPT
+from default_prompts import (
+    FRONTEND_PROMPT,
+    BACKEND_PROMPT,
+    CONTRACT_PROMPT,
+    JAVA_PROMPT,
+    PHP_PROMPT,
+)
 
 DB_PATH = os.getenv('DB_PATH', 'audit.db')
 
@@ -69,6 +75,9 @@ def init_db():
             finished_at    TEXT,
             status         TEXT DEFAULT 'running',
             scan_type      TEXT DEFAULT 'incremental',
+            llm_profile_id INTEGER DEFAULT NULL,
+            llm_profile_ids TEXT DEFAULT '',
+            llm_consensus_mode TEXT DEFAULT 'single',
             total_commits  INTEGER DEFAULT 0,
             total_findings INTEGER DEFAULT 0,
             critical_count INTEGER DEFAULT 0,
@@ -142,7 +151,10 @@ def init_db():
             minute  INTEGER NOT NULL DEFAULT 0,
             weekday INTEGER DEFAULT NULL,
             enabled INTEGER DEFAULT 1,
-            label   TEXT    DEFAULT ''
+            label   TEXT    DEFAULT '',
+            llm_profile_id INTEGER DEFAULT NULL,
+            llm_profile_ids TEXT DEFAULT '',
+            llm_consensus_mode TEXT DEFAULT 'single'
         );
         CREATE TABLE IF NOT EXISTS llm_profiles (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,7 +162,8 @@ def init_db():
             provider  TEXT NOT NULL DEFAULT '',
             model     TEXT DEFAULT '',
             api_key   TEXT DEFAULT '',
-            base_url  TEXT DEFAULT ''
+            base_url  TEXT DEFAULT '',
+            auto_optimize_skills INTEGER DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS repo_sync_status (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,6 +188,18 @@ def init_db():
             last_scan_id  INTEGER DEFAULT NULL,
             updated_at    TEXT
         );
+        CREATE TABLE IF NOT EXISTS adaptive_skills (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            skill_type    TEXT NOT NULL DEFAULT 'positive',
+            scan_type     TEXT NOT NULL,
+            language_key  TEXT NOT NULL,
+            finding_title TEXT NOT NULL,
+            hint_text     TEXT NOT NULL,
+            severity      TEXT DEFAULT '',
+            learn_count   INTEGER DEFAULT 1,
+            created_at    TEXT,
+            updated_at    TEXT
+        );
         """)
         # Syslog 默认配置
         conn.execute("INSERT OR IGNORE INTO syslog_config VALUES ('enabled','0')")
@@ -191,6 +216,11 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comp_name ON component_inventory(component)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comp_repo ON component_inventory(repo)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_comp_source ON component_inventory(source)")
+        skill_cols = [r['name'] for r in conn.execute("PRAGMA table_info(adaptive_skills)").fetchall()]
+        if 'skill_type' not in skill_cols:
+            conn.execute("ALTER TABLE adaptive_skills ADD COLUMN skill_type TEXT NOT NULL DEFAULT 'positive'")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_adaptive_skill_unique "
+                     "ON adaptive_skills(skill_type, scan_type, language_key, finding_title)")
         # 默认管理员账户
         row = conn.execute("SELECT username FROM admin_users WHERE username='admin'").fetchone()
         if not row:
@@ -212,10 +242,21 @@ def init_db():
             conn.execute("ALTER TABLE scan_schedules ADD COLUMN weekday INTEGER DEFAULT NULL")
         if 'llm_profile_id' not in sched_cols:
             conn.execute("ALTER TABLE scan_schedules ADD COLUMN llm_profile_id INTEGER DEFAULT NULL")
+        if 'llm_profile_ids' not in sched_cols:
+            conn.execute("ALTER TABLE scan_schedules ADD COLUMN llm_profile_ids TEXT DEFAULT ''")
+        if 'llm_consensus_mode' not in sched_cols:
+            conn.execute("ALTER TABLE scan_schedules ADD COLUMN llm_consensus_mode TEXT DEFAULT 'single'")
         # 迁移 scans 表
         scan_cols = [r['name'] for r in conn.execute("PRAGMA table_info(scans)").fetchall()]
         if 'llm_profile_id' not in scan_cols:
             conn.execute("ALTER TABLE scans ADD COLUMN llm_profile_id INTEGER DEFAULT NULL")
+        if 'llm_profile_ids' not in scan_cols:
+            conn.execute("ALTER TABLE scans ADD COLUMN llm_profile_ids TEXT DEFAULT ''")
+        if 'llm_consensus_mode' not in scan_cols:
+            conn.execute("ALTER TABLE scans ADD COLUMN llm_consensus_mode TEXT DEFAULT 'single'")
+        profile_cols = [r['name'] for r in conn.execute("PRAGMA table_info(llm_profiles)").fetchall()]
+        if 'auto_optimize_skills' not in profile_cols:
+            conn.execute("ALTER TABLE llm_profiles ADD COLUMN auto_optimize_skills INTEGER DEFAULT 0")
         # 若各类型均无默认记录则初始化
         if not conn.execute("SELECT 1 FROM scan_schedules WHERE type='poison'").fetchone():
             conn.execute("INSERT INTO scan_schedules (type,hour,minute,enabled,label) VALUES ('poison',-1,0,1,'每小时执行')")
@@ -248,6 +289,18 @@ def init_db():
             ('Smart Contract', 'contract',
              '.sol',
              CONTRACT_PROMPT, now))
+        conn.execute("""INSERT OR IGNORE INTO prompts
+            (name, category, extensions, content, is_default, enabled, created_at)
+            VALUES (?,?,?,?,1,1,?)""",
+            ('Java Security', 'backend',
+             '.java,.jsp,.jspx,.tag,.kt,.kts,.gradle',
+             JAVA_PROMPT, now))
+        conn.execute("""INSERT OR IGNORE INTO prompts
+            (name, category, extensions, content, is_default, enabled, created_at)
+            VALUES (?,?,?,?,1,1,?)""",
+            ('PHP Security', 'backend',
+             '.php,.phtml,.phar,.inc,.module,.install,.theme',
+             PHP_PROMPT, now))
         # Migrations for existing databases
         existing_cols = [r['name'] for r in conn.execute("PRAGMA table_info(findings)").fetchall()]
         if 'status' not in existing_cols:
@@ -336,14 +389,27 @@ def set_app_config(key, value):
         conn.commit()
 
 # ── 扫描记录 ──────────────────────────────────────────────────────
-def create_scan(scan_type='incremental_audit', full_scan=False, llm_profile_id=None):
+def create_scan(scan_type='incremental_audit', full_scan=False, llm_profile_id=None,
+                llm_profile_ids=None, llm_consensus_mode='single'):
     # full_scan 为旧版兼容参数
     if full_scan and scan_type == 'incremental_audit':
         scan_type = 'full_audit'
+    profile_ids = [int(x) for x in (llm_profile_ids or []) if str(x).strip()]
+    if not profile_ids and llm_profile_id:
+        profile_ids = [int(llm_profile_id)]
+    profile_ids_json = json.dumps(profile_ids, ensure_ascii=False) if profile_ids else ''
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO scans (started_at, status, scan_type, llm_profile_id) VALUES (?,?,?,?)",
-            (datetime.now().isoformat(), 'running', scan_type, llm_profile_id)
+            "INSERT INTO scans (started_at, status, scan_type, llm_profile_id, llm_profile_ids, llm_consensus_mode) "
+            "VALUES (?,?,?,?,?,?)",
+            (
+                datetime.now().isoformat(),
+                'running',
+                scan_type,
+                llm_profile_id,
+                profile_ids_json,
+                llm_consensus_mode or 'single',
+            )
         )
         conn.commit()
         return cur.lastrowid
@@ -404,14 +470,27 @@ def delete_scan(scan_id: int):
 
 def get_scans(limit=50):
     with get_conn() as conn:
-        return [dict(r) for r in conn.execute(
+        rows = [dict(r) for r in conn.execute(
             "SELECT * FROM scans ORDER BY id DESC LIMIT ?", (limit,)
         ).fetchall()]
+    for row in rows:
+        try:
+            row['llm_profile_ids'] = json.loads(row.get('llm_profile_ids') or '[]')
+        except Exception:
+            row['llm_profile_ids'] = []
+    return rows
 
 def get_scan(scan_id: int):
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM scans WHERE id=?", (scan_id,)).fetchone()
-        return dict(row) if row else None
+        item = dict(row) if row else None
+    if not item:
+        return None
+    try:
+        item['llm_profile_ids'] = json.loads(item.get('llm_profile_ids') or '[]')
+    except Exception:
+        item['llm_profile_ids'] = []
+    return item
 
 
 # ── Syslog 配置 ───────────────────────────────────────────────────
@@ -628,6 +707,87 @@ def get_component_summary():
             "ORDER BY repo_count DESC, hit_count DESC, component ASC "
             "LIMIT 500"
         ).fetchall()
+        return [dict(r) for r in rows]
+
+def _language_key(filename: str) -> str:
+    base = os.path.basename((filename or '').strip()).lower()
+    ext = os.path.splitext(base)[1].lower()
+    return ext or base or '*'
+
+def learn_adaptive_skills(scan_type: str, findings: list, skill_type: str = 'positive'):
+    if not scan_type or not findings:
+        return 0
+    skill_type = (skill_type or 'positive').strip().lower()
+    if skill_type not in {'positive', 'negative'}:
+        skill_type = 'positive'
+    now = datetime.now().isoformat()
+    learned = 0
+    with get_conn() as conn:
+        for f in findings:
+            review_count = int(f.get('review_count') or 0)
+            if review_count < 2 and skill_type == 'positive':
+                continue
+            title = (f.get('title') or '').strip()
+            filename = (f.get('filename') or '').strip()
+            if not title or not filename:
+                continue
+            lang_key = _language_key(filename)
+            severity = (f.get('severity') or '').strip().lower()
+            if skill_type == 'negative':
+                hint_text = f"Previously vetoed low-confidence pattern: {title}"
+            else:
+                hint_text = f"Prior confirmed finding: {title}"
+            cur = conn.execute(
+                "UPDATE adaptive_skills "
+                "SET learn_count=learn_count+1, severity=?, hint_text=?, updated_at=? "
+                "WHERE skill_type=? AND scan_type=? AND language_key=? AND finding_title=?",
+                (severity, hint_text, now, skill_type, scan_type, lang_key, title)
+            )
+            if cur.rowcount == 0:
+                conn.execute(
+                    "INSERT INTO adaptive_skills "
+                    "(skill_type,scan_type,language_key,finding_title,hint_text,severity,learn_count,created_at,updated_at) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    (skill_type, scan_type, lang_key, title, hint_text, severity, 1, now, now)
+                )
+            learned += 1
+        conn.commit()
+    return learned
+
+def get_adaptive_skill_hints(scan_type: str, filename: str, skill_type: str = 'positive', limit: int = 6):
+    if not scan_type:
+        return []
+    skill_type = (skill_type or 'positive').strip().lower()
+    lang_key = _language_key(filename)
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT finding_title,hint_text,severity,learn_count,skill_type "
+            "FROM adaptive_skills WHERE skill_type=? AND scan_type=? AND language_key=? "
+            "ORDER BY learn_count DESC, updated_at DESC LIMIT ?",
+            (skill_type, scan_type, lang_key, max(1, min(int(limit or 6), 20)))
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+def get_adaptive_skills(scan_type: str = '', language_key: str = '', skill_type: str = '',
+                        limit: int = 200):
+    q = (
+        "SELECT id,skill_type,scan_type,language_key,finding_title,hint_text,severity,learn_count,created_at,updated_at "
+        "FROM adaptive_skills WHERE 1=1"
+    )
+    params = []
+    if skill_type:
+        q += " AND skill_type=?"
+        params.append(skill_type)
+    if scan_type:
+        q += " AND scan_type=?"
+        params.append(scan_type)
+    if language_key:
+        q += " AND language_key=?"
+        params.append(language_key)
+    q += " ORDER BY learn_count DESC, updated_at DESC LIMIT ?"
+    params.append(max(1, min(int(limit or 200), 1000)))
+    with get_conn() as conn:
+        rows = conn.execute(q, tuple(params)).fetchall()
         return [dict(r) for r in rows]
 
 def get_stats(period: str, repo: str = 'all'):
@@ -921,23 +1081,48 @@ def get_scan_schedules(scan_type: str = None):
     with get_conn() as conn:
         if scan_type:
             rows = conn.execute(
-                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id FROM scan_schedules "
+                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id,llm_profile_ids,llm_consensus_mode "
+                "FROM scan_schedules "
                 "WHERE type=? ORDER BY hour,minute",
                 (scan_type,)
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id FROM scan_schedules "
+                "SELECT id,type,hour,minute,weekday,enabled,label,llm_profile_id,llm_profile_ids,llm_consensus_mode "
+                "FROM scan_schedules "
                 "ORDER BY type,hour,minute"
             ).fetchall()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            item = dict(r)
+            try:
+                item['llm_profile_ids'] = json.loads(item.get('llm_profile_ids') or '[]')
+            except Exception:
+                item['llm_profile_ids'] = []
+            result.append(item)
+        return result
 
 def add_scan_schedule(scan_type: str, hour: int, minute: int,
-                      weekday=None, label: str = '', llm_profile_id=None) -> int:
+                      weekday=None, label: str = '', llm_profile_id=None,
+                      llm_profile_ids=None, llm_consensus_mode='single') -> int:
+    profile_ids = [int(x) for x in (llm_profile_ids or []) if str(x).strip()]
+    if not profile_ids and llm_profile_id:
+        profile_ids = [int(llm_profile_id)]
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO scan_schedules (type,hour,minute,weekday,enabled,label,llm_profile_id) VALUES (?,?,?,?,1,?,?)",
-            (scan_type, hour, minute, weekday, label, llm_profile_id)
+            "INSERT INTO scan_schedules "
+            "(type,hour,minute,weekday,enabled,label,llm_profile_id,llm_profile_ids,llm_consensus_mode) "
+            "VALUES (?,?,?,?,1,?,?,?,?)",
+            (
+                scan_type,
+                hour,
+                minute,
+                weekday,
+                label,
+                llm_profile_id,
+                json.dumps(profile_ids, ensure_ascii=False) if profile_ids else '',
+                llm_consensus_mode or 'single',
+            )
         )
         conn.commit()
         return cur.lastrowid
@@ -966,9 +1151,22 @@ def is_whitelisted(repo: str, filename: str, title: str, whitelist: list) -> boo
 def get_llm_profiles():
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT id, name, provider, model, base_url FROM llm_profiles ORDER BY id"
+            "SELECT id, name, provider, model, base_url, auto_optimize_skills FROM llm_profiles ORDER BY id"
         ).fetchall()
         return [dict(r) for r in rows]
+
+def get_llm_profiles_by_ids(profile_ids: list[int]):
+    ids = [int(x) for x in (profile_ids or []) if str(x).strip()]
+    if not ids:
+        return []
+    ph = ','.join(['?'] * len(ids))
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM llm_profiles WHERE id IN ({ph})",
+            tuple(ids)
+        ).fetchall()
+        mapping = {int(r['id']): dict(r) for r in rows}
+    return [mapping[i] for i in ids if i in mapping]
 
 def get_llm_profile(profile_id: int):
     with get_conn() as conn:
@@ -978,24 +1176,33 @@ def get_llm_profile(profile_id: int):
 def add_llm_profile(name: str, provider: str, model: str, api_key: str, base_url: str) -> int:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO llm_profiles (name, provider, model, api_key, base_url) VALUES (?,?,?,?,?)",
-            (name, provider, model, api_key, base_url)
+            "INSERT INTO llm_profiles (name, provider, model, api_key, base_url, auto_optimize_skills) VALUES (?,?,?,?,?,?)",
+            (name, provider, model, api_key, base_url, 0)
         )
         conn.commit()
         return cur.lastrowid
 
-def update_llm_profile(profile_id: int, name: str, provider: str, model: str, api_key: str, base_url: str):
+def update_llm_profile(profile_id: int, name: str, provider: str, model: str, api_key: str,
+                       base_url: str, auto_optimize_skills: bool = False):
     with get_conn() as conn:
         if api_key and '****' not in api_key:
             conn.execute(
-                "UPDATE llm_profiles SET name=?, provider=?, model=?, api_key=?, base_url=? WHERE id=?",
-                (name, provider, model, api_key, base_url, profile_id)
+                "UPDATE llm_profiles SET name=?, provider=?, model=?, api_key=?, base_url=?, auto_optimize_skills=? WHERE id=?",
+                (name, provider, model, api_key, base_url, 1 if auto_optimize_skills else 0, profile_id)
             )
         else:
             conn.execute(
-                "UPDATE llm_profiles SET name=?, provider=?, model=?, base_url=? WHERE id=?",
-                (name, provider, model, base_url, profile_id)
+                "UPDATE llm_profiles SET name=?, provider=?, model=?, base_url=?, auto_optimize_skills=? WHERE id=?",
+                (name, provider, model, base_url, 1 if auto_optimize_skills else 0, profile_id)
             )
+        conn.commit()
+
+def set_llm_profile_auto_optimize(profile_id: int, enabled: bool):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE llm_profiles SET auto_optimize_skills=? WHERE id=?",
+            (1 if enabled else 0, profile_id)
+        )
         conn.commit()
 
 def delete_llm_profile(profile_id: int):

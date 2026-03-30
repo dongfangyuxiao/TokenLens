@@ -95,6 +95,36 @@ def _make_fingerprint(repo, filename, title, line=''):
     src = f"{repo}:{filename}:{title}:{line}"
     return hashlib.md5(src.encode()).hexdigest()
 
+def _profile_label(llm_cfg: dict) -> str:
+    provider = (llm_cfg or {}).get('provider', '').strip() or 'unknown'
+    model = (llm_cfg or {}).get('model', '').strip()
+    return f'{provider}/{model}' if model else provider
+
+def _build_adaptive_skill_text(scan_type: str, filename: str) -> str:
+    positive_hints = db.get_adaptive_skill_hints(scan_type, filename, skill_type='positive', limit=6)
+    negative_hints = db.get_adaptive_skill_hints(scan_type, filename, skill_type='negative', limit=4)
+    if not positive_hints and not negative_hints:
+        return ''
+    lines = ['\n\nADAPTIVE SKILLS FROM PRIOR MULTI-MODEL REVIEWS:']
+    if positive_hints:
+        lines.append('High-priority confirmed patterns:')
+        for idx, item in enumerate(positive_hints, start=1):
+            sev = (item.get('severity') or '').strip().lower() or 'unknown'
+            lines.append(
+                f"{idx}. [{sev}] {item.get('hint_text', '').strip()} "
+                f"(confirmed {int(item.get('learn_count') or 0)} times)"
+            )
+    if negative_hints:
+        lines.append('Previously vetoed low-confidence patterns, avoid reporting them unless current evidence is stronger:')
+        for idx, item in enumerate(negative_hints, start=1):
+            sev = (item.get('severity') or '').strip().lower() or 'unknown'
+            lines.append(
+                f"{idx}. [{sev}] {item.get('hint_text', '').strip()} "
+                f"(vetoed {int(item.get('learn_count') or 0)} times)"
+            )
+    lines.append('Use confirmed patterns to focus attention, and use vetoed patterns to suppress weak or speculative reports.')
+    return '\n'.join(lines)
+
 def build_llm_caller(llm_cfg: dict):
     """
     根据配置构造调用函数 call_fn(prompt) -> str。
@@ -148,6 +178,72 @@ def build_llm_caller(llm_cfg: dict):
             raise
     return call_fn
 
+def _normalize_finding_key(filename: str, finding: dict):
+    line = str(finding.get('line', '') or '').strip()
+    title = (finding.get('title', '') or '').strip().lower()
+    ftype = (finding.get('type', '') or '').strip().lower()
+    return filename, line, title, ftype
+
+def _pick_severity(severities: list[str]) -> str:
+    order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+    vals = [str(s or '').lower() for s in severities if s]
+    if not vals:
+        return 'low'
+    return sorted(vals, key=lambda x: order.get(x, 99))[0]
+
+def _merge_model_results(model_results: list[dict], consensus_mode: str = 'single'):
+    if not model_results:
+        return [], '', []
+    if len(model_results) == 1 or consensus_mode == 'single':
+        item = model_results[0]
+        return item.get('findings', []), item.get('summary', ''), []
+
+    buckets = {}
+    summaries = []
+    for item in model_results:
+        label = item.get('label', '')
+        summary = (item.get('summary') or '').strip()
+        if summary:
+            summaries.append(f'[{label}] {summary}')
+        for finding in item.get('findings', []):
+            key = _normalize_finding_key(finding.get('filename', ''), finding)
+            bucket = buckets.setdefault(key, {'votes': [], 'findings': []})
+            bucket['votes'].append(label)
+            bucket['findings'].append(finding)
+
+    total_models = len(model_results)
+    if consensus_mode == 'all':
+        threshold = total_models
+    elif consensus_mode == 'any':
+        threshold = 1
+    else:
+        threshold = max(2, (total_models // 2) + 1) if total_models > 1 else 1
+
+    merged = []
+    rejected = []
+    for bucket in buckets.values():
+        votes = bucket['votes']
+        unique_votes = len(set(votes))
+        if unique_votes < threshold:
+            base = dict(bucket['findings'][0])
+            base['reviewed_by'] = votes
+            base['review_count'] = unique_votes
+            rejected.append(base)
+            continue
+        findings = bucket['findings']
+        base = dict(findings[0])
+        base['severity'] = _pick_severity([f.get('severity', 'low') for f in findings])
+        base['reviewed_by'] = votes
+        base['review_count'] = unique_votes
+        merged.append(base)
+
+    summary = ' | '.join(summaries[:3])
+    if consensus_mode != 'single':
+        summary = f'Consensus={consensus_mode}; kept {len(merged)} findings from {total_models} models.' + (
+            f' {summary}' if summary else ''
+        )
+    return merged, summary, rejected
+
 _SCAN_TYPE_INSTRUCTION = {
     'poison': (
         "\n\nTASK FOCUS: This is a supply chain and code poisoning scan. "
@@ -183,6 +279,9 @@ def _analyze_single_file(filename, patch, commit_message, call_fn, prompts, max_
         message=commit_message,
         diff=patch
     )
+    adaptive_skill_text = _build_adaptive_skill_text(scan_type, filename)
+    if adaptive_skill_text:
+        prompt += adaptive_skill_text
     task_instruction = _SCAN_TYPE_INSTRUCTION.get(scan_type, '')
     if task_instruction:
         prompt += task_instruction
@@ -199,6 +298,26 @@ def _analyze_single_file(filename, patch, commit_message, call_fn, prompts, max_
     except Exception as e:
         print(f'    [analyzer] {filename} LLM 分析失败: {e}')
         return [], ''
+
+def _analyze_single_file_multi(filename, patch, commit_message, llm_cfgs, prompts, max_diff_chars,
+                               scan_type='full_audit', consensus_mode='single'):
+    model_results = []
+    for llm_cfg in llm_cfgs:
+        call_fn = build_llm_caller(llm_cfg)
+        if not call_fn:
+            continue
+        findings, summary = _analyze_single_file(
+            filename, patch, commit_message, call_fn, prompts, max_diff_chars, scan_type
+        )
+        model_results.append({
+            'label': _profile_label(llm_cfg),
+            'findings': findings,
+            'summary': summary,
+        })
+    findings, summary, rejected = _merge_model_results(model_results, consensus_mode)
+    for item in rejected:
+        item['filename'] = filename
+    return findings, summary, rejected
 
 # 跨文件分析每个文件最多取多少字符的代码片段（控制 prompt 总长度）
 _CROSS_SNIPPET_CHARS = 800
@@ -307,10 +426,30 @@ Respond ONLY with valid JSON (no markdown fences):
         print(f'    [analyzer] 跨文件分析失败: {e}')
         return []
 
+def _analyze_cross_file_multi(files_data, commit_message, llm_cfgs, scan_type='full_audit',
+                              consensus_mode='single'):
+    model_results = []
+    for llm_cfg in llm_cfgs:
+        call_fn = build_llm_caller(llm_cfg)
+        if not call_fn:
+            continue
+        findings = _analyze_cross_file(files_data, commit_message, call_fn, scan_type)
+        model_results.append({
+            'label': _profile_label(llm_cfg),
+            'findings': findings,
+            'summary': '',
+        })
+    merged, _, rejected = _merge_model_results(model_results, consensus_mode)
+    for item in rejected:
+        involved = item.get('files', [])
+        item['filename'] = ' + '.join(involved) if involved else '(cross-file)'
+    return merged, rejected
+
 def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
                    opensca_token='', semgrep_token='',
                    added_only=False, scan_type='full_audit',
-                   stop_event=None):
+                   stop_event=None, llm_cfgs=None,
+                   llm_consensus_mode='single', auto_optimize_skills=False):
     """
     分析一次提交，返回 findings 列表（每条附带 fingerprint）。
 
@@ -322,7 +461,10 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
     if prompts is None:
         prompts = db.get_prompts_for_analysis()
 
-    call_fn = build_llm_caller(llm_cfg)
+    effective_llm_cfgs = [cfg for cfg in (llm_cfgs or []) if cfg]
+    if not effective_llm_cfgs and llm_cfg:
+        effective_llm_cfgs = [llm_cfg]
+    call_fn = build_llm_caller(effective_llm_cfgs[0]) if effective_llm_cfgs else None
 
     # 筛选可分析文件
     # added_only=True：只分析新增文件（status=added），忽略修改/删除
@@ -339,6 +481,7 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
     repo    = commit.get('repo', '')
     message = commit.get('message', '')
     all_findings = []
+    rejected_findings = []
 
     # patch 字典，供跨文件分析使用（保留原始内容，不受 max_diff_chars 截断）
     patch_map = {fname: patch for fname, patch in eligible}
@@ -351,8 +494,8 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
             future_map = {
                 executor.submit(
-                    _analyze_single_file, fname, patch, message,
-                    call_fn, prompts, max_diff_chars, scan_type
+                    _analyze_single_file_multi, fname, patch, message,
+                    effective_llm_cfgs, prompts, max_diff_chars, scan_type, llm_consensus_mode
                 ): fname
                 for fname, patch in eligible
             }
@@ -364,9 +507,10 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
                     return all_findings
                 fname = future_map[future]
                 try:
-                    findings, summary = future.result()
+                    findings, summary, rejected = future.result()
                     file_summaries[fname] = summary
                     file_findings[fname]  = findings
+                    rejected_findings.extend(rejected or [])
                     for f in findings:
                         # 附加指纹
                         f['fingerprint'] = _make_fingerprint(
@@ -387,7 +531,10 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
                  file_findings.get(fname, []))
                 for fname, _ in eligible
             ]
-            cross = _analyze_cross_file(files_data, message, call_fn, scan_type)
+            cross, cross_rejected = _analyze_cross_file_multi(
+                files_data, message, effective_llm_cfgs, scan_type, llm_consensus_mode
+            )
+            rejected_findings.extend(cross_rejected or [])
             if cross:
                 print(f'    [analyzer] 跨文件分析发现 {len(cross)} 个额外漏洞')
             for cf in cross:
@@ -418,5 +565,16 @@ def analyze_commit(commit, llm_cfg=None, max_diff_chars=12000, prompts=None,
                         all_findings.append(f)
             except Exception as e:
                 print(f'    [analyzer] {filename} opensca 失败: {e}')
+
+    if auto_optimize_skills and len(effective_llm_cfgs) > 1 and llm_consensus_mode != 'single' and all_findings:
+        try:
+            db.learn_adaptive_skills(scan_type, all_findings)
+        except Exception as e:
+            print(f'    [analyzer] adaptive skill 学习失败: {e}')
+    if auto_optimize_skills and len(effective_llm_cfgs) > 1 and llm_consensus_mode in {'majority', 'all'} and rejected_findings:
+        try:
+            db.learn_adaptive_skills(scan_type, rejected_findings, skill_type='negative')
+        except Exception as e:
+            print(f'    [analyzer] adaptive suppression 学习失败: {e}')
 
     return all_findings

@@ -583,10 +583,41 @@ syslog.send_event('scan_completed', ...)
 
 ### 8.3 Prompt 设计
 
-内置三类 Prompt（`default_prompts.py`），在 LLM 分析阶段即明确任务：
+内置五类 Prompt / Skills（`default_prompts.py`），在 LLM 分析阶段即明确任务：
 - **投毒检测 Prompt**：专注后门、恶意依赖、异常外联
 - **增量审计 Prompt**：专注 RCE、SQL 注入、认证绕过、SSRF 等高影响漏洞
 - **全量审计 Prompt**：全覆盖 OWASP Top 10 及供应链风险
+- **Java Security Prompt**：补齐 Spring / JSP / Java 反序列化、XXE、鉴权绕过、构建投毒
+- **PHP Security Prompt**：补齐文件包含、反序列化、文件上传、Open Redirect、Composer 投毒
+
+### 8.4 多模型交叉审计
+
+扫描记录与计划任务均支持以下字段：
+
+- `llm_profile_id`：兼容旧版单模型配置
+- `llm_profile_ids`：新的多模型链配置，JSON 数组
+- `llm_consensus_mode`：复核策略，取值为 `single / any / majority / all`
+- `llm_profiles.auto_optimize_skills`：模型配置级开关，控制是否允许该模型参与联合校验后自动优化 skills
+
+执行逻辑：
+
+- 单文件分析：每个模型独立审计后按标题/类型/行号聚合
+- 跨文件分析：每个模型独立做联合审计，再按共识策略合并
+- `single`：只保留首个模型结果
+- `any`：任一模型命中即保留
+- `majority`：多数模型命中才保留，适合压误报
+- `all`：所有模型都确认才保留，最保守
+
+自优化逻辑：
+
+- 仅当模型数大于 1 且策略不是 `single` 时启用
+- 且所选模型中至少有一个配置勾选了 `auto_optimize_skills`
+- 仅学习 `review_count >= 2` 的确认结果
+- 学习结果按 `scan_type + language_key` 存入 `adaptive_skills`
+- 后续同语言、同任务的文件审计时，自动把这些 adaptive skills 追加到 Prompt
+- 可通过 `GET /api/adaptive-skills` 查看当前沉淀的技能提示
+- 当策略为 `majority / all` 时，未达到阈值、且被多数模型否决的候选项会作为 `negative` skills 沉淀
+- Prompt 同时注入 `positive` 与 `negative` skills：前者提升召回，后者压制弱证据误报
 
 返回格式要求 LLM 输出结构化 JSON：
 ```json

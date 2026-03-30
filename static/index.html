@@ -1524,7 +1524,7 @@ body.light .empty{
       <div class="card">
         <div class="card-title">AI 模型配置</div>
         <div style="font-size:13px;color:#888;margin-bottom:16px">
-          统一配置全局 LLM（支持本地模型与云端模型）。建议在下方“AI 配置列表”维护多模型，并在扫描时按任务选择。
+          统一配置全局 LLM（支持本地模型与云端模型）。建议在下方“AI 配置列表”维护多模型，并在扫描时通过交叉审计策略组合使用。
         </div>
         <div class="form-row col2">
           <div class="form-group">
@@ -1624,6 +1624,18 @@ body.light .empty{
             <div class="form-group">
               <label>自定义 Base URL（私有部署/中转时填写）</label>
               <input id="profileBaseUrl" placeholder="如：http://localhost:11434/v1">
+            </div>
+          </div>
+          <div class="form-row" style="align-items:center">
+            <label style="display:flex;align-items:center;gap:10px;font-size:14px;color:#1a1a1a">
+              <label class="toggle">
+                <input type="checkbox" id="profileAutoOptimizeSkills">
+                <span class="toggle-slider"></span>
+              </label>
+              启用多模型联合校验后自动优化 skills
+            </label>
+            <div style="font-size:12px;color:#888;margin-top:6px">
+              勾选后，该模型参与多模型联合校验时，会自动学习真阳性模式并压制误报噪音。
             </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
@@ -1831,9 +1843,18 @@ body.light .empty{
               <input id="newSched-poison-label" placeholder="如：每小时检测">
             </div>
             <div class="form-group" style="margin:0;min-width:130px">
-              <label style="font-size:12px">AI 模型</label>
-              <select id="newSched-poison-llm" style="width:130px">
+              <label style="font-size:12px">AI 模型链</label>
+              <select id="newSched-poison-llm" multiple size="4" style="width:220px;height:auto">
                 <option value="">全局配置</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;min-width:140px">
+              <label style="font-size:12px">复核策略</label>
+              <select id="newSched-poison-consensus" style="width:140px">
+                <option value="majority">多数通过</option>
+                <option value="all">全部确认</option>
+                <option value="any">任一命中</option>
+                <option value="single">仅首个模型</option>
               </select>
             </div>
             <div style="display:flex;gap:6px;padding-bottom:1px">
@@ -1886,9 +1907,18 @@ body.light .empty{
               <input id="newSched-incremental_audit-label" placeholder="如：凌晨审计">
             </div>
             <div class="form-group" style="margin:0;min-width:130px">
-              <label style="font-size:12px">AI 模型</label>
-              <select id="newSched-incremental_audit-llm" style="width:130px">
+              <label style="font-size:12px">AI 模型链</label>
+              <select id="newSched-incremental_audit-llm" multiple size="4" style="width:220px;height:auto">
                 <option value="">全局配置</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;min-width:140px">
+              <label style="font-size:12px">复核策略</label>
+              <select id="newSched-incremental_audit-consensus" style="width:140px">
+                <option value="majority">多数通过</option>
+                <option value="all">全部确认</option>
+                <option value="any">任一命中</option>
+                <option value="single">仅首个模型</option>
               </select>
             </div>
             <div style="display:flex;gap:6px;padding-bottom:1px">
@@ -1941,9 +1971,18 @@ body.light .empty{
               <input id="newSched-full_audit-label" placeholder="如：周六全量">
             </div>
             <div class="form-group" style="margin:0;min-width:130px">
-              <label style="font-size:12px">AI 模型</label>
-              <select id="newSched-full_audit-llm" style="width:130px">
+              <label style="font-size:12px">AI 模型链</label>
+              <select id="newSched-full_audit-llm" multiple size="4" style="width:220px;height:auto">
                 <option value="">全局配置</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;min-width:140px">
+              <label style="font-size:12px">复核策略</label>
+              <select id="newSched-full_audit-consensus" style="width:140px">
+                <option value="majority">多数通过</option>
+                <option value="all">全部确认</option>
+                <option value="any">任一命中</option>
+                <option value="single">仅首个模型</option>
               </select>
             </div>
             <div style="display:flex;gap:6px;padding-bottom:1px">
@@ -2463,8 +2502,18 @@ body.light .empty{
     </div>
     <div class="form-group" style="margin-bottom:20px">
       <label data-i18n="modal.selectAI">选择 AI 模型</label>
-      <select id="scanModalLlm" style="width:100%">
+      <select id="scanModalLlm" multiple size="5" style="width:100%;height:auto;min-height:120px">
         <option value="" data-i18n="modal.globalAI">全局 AI 配置</option>
+      </select>
+      <div style="font-size:12px;color:#888;margin-top:6px">可多选：如 DeepSeek 初审，GPT 复核，Claude 验证。</div>
+    </div>
+    <div class="form-group" style="margin-bottom:20px">
+      <label>交叉审计策略</label>
+      <select id="scanModalConsensus" style="width:100%">
+        <option value="majority">多数通过（推荐）</option>
+        <option value="all">全部确认</option>
+        <option value="any">任一命中</option>
+        <option value="single">仅首个模型</option>
       </select>
     </div>
     <div class="form-group" style="margin-bottom:20px">
@@ -2846,12 +2895,16 @@ async function doTriggerScan() {
   if (btn) btn.textContent = _lang === 'en' ? 'Scanning…' : '扫描中…';
   allBtns.forEach(b => { if (b) b.disabled = true; });
   try {
-    const llmProfileId = parseInt(document.getElementById('scanModalLlm')?.value) || null;
+    const llmProfileIds = getSelectedProfileIds('scanModalLlm');
+    const llmProfileId = llmProfileIds[0] || null;
+    const llmConsensusMode = document.getElementById('scanModalConsensus')?.value || 'single';
     const srcSel = document.getElementById('scanModalSources');
     const selectedSources = srcSel ? [...srcSel.selectedOptions].map(o => o.value) : [];
     const res = await api('POST', '/api/scan/trigger', {
       scan_type: scanType,
       llm_profile_id: llmProfileId,
+      llm_profile_ids: llmProfileIds,
+      llm_consensus_mode: llmConsensusMode,
       selected_sources: selectedSources
     });
     toast(res.msg || (_lang === 'en' ? `${label} started` : `${label}已启动`));
@@ -3714,6 +3767,7 @@ function renderProfileList() {
           <span class="badge badge-running">${PROVIDER_LABEL[p.provider]||p.provider}</span>
           ${p.model ? `<span style="margin-left:6px">${p.model}</span>` : '<span style="margin-left:6px;color:#bbb">默认模型</span>'}
           ${p.base_url ? `<span style="margin-left:6px;color:#aaa">${p.base_url}</span>` : ''}
+          ${p.auto_optimize_skills ? `<span style="margin-left:6px;color:#16a34a">自动优化 skills</span>` : ''}
         </div>
       </div>
       <button class="btn btn-default btn-sm" onclick="testProfileById(${p.id})" id="testProfileBtn-${p.id}">测试</button>
@@ -3732,10 +3786,29 @@ function populateProfileSelects() {
   ['scanModalLlm','newSched-poison-llm','newSched-incremental_audit-llm','newSched-full_audit-llm','iaLlm','iaUploadLlm','iaRepoLlm'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    const cur = el.value;
+    const isMulti = el.multiple;
+    const cur = isMulti ? [...el.selectedOptions].map(o => o.value) : el.value;
     el.innerHTML = '<option value="">' + (_lang === 'en' ? 'Global Config' : '全局配置') + '</option>' + opts;
-    el.value = cur || '';
+    if (isMulti) {
+      [...el.options].forEach(opt => { opt.selected = Array.isArray(cur) && cur.includes(opt.value); });
+    } else {
+      el.value = cur || '';
+    }
   });
+}
+
+function getSelectedProfileIds(selectId) {
+  const el = document.getElementById(selectId);
+  if (!el) return [];
+  const vals = [...el.selectedOptions].map(o => parseInt(o.value, 10)).filter(Number.isFinite);
+  return [...new Set(vals)];
+}
+
+function getProfileChainSummary(ids, mode) {
+  const chain = (ids || []).map(id => _llmProfiles.find(p => p.id === id)?.name).filter(Boolean);
+  if (!chain.length) return '全局配置';
+  const modeLabel = {single:'单模型', any:'任一命中', majority:'多数通过', all:'全部确认'}[mode || 'single'] || (mode || 'single');
+  return `${chain.join(' + ')} / ${modeLabel}`;
 }
 
 function showProfileForm() {
@@ -3746,6 +3819,7 @@ function showProfileForm() {
   document.getElementById('profileModel').value = '';
   document.getElementById('profileApiKey').value = '';
   document.getElementById('profileBaseUrl').value = '';
+  document.getElementById('profileAutoOptimizeSkills').checked = false;
   document.getElementById('llmProfileForm').style.display = 'block';
 }
 
@@ -3763,6 +3837,7 @@ function editProfile(id) {
   document.getElementById('profileModel').value = p.model || '';
   document.getElementById('profileApiKey').value = '';
   document.getElementById('profileBaseUrl').value = p.base_url || '';
+  document.getElementById('profileAutoOptimizeSkills').checked = !!p.auto_optimize_skills;
   document.getElementById('llmProfileForm').style.display = 'block';
   document.getElementById('llmProfileForm').scrollIntoView({behavior:'smooth', block:'nearest'});
 }
@@ -3774,13 +3849,20 @@ async function saveProfile() {
   const model    = document.getElementById('profileModel').value.trim();
   const apiKey   = document.getElementById('profileApiKey').value.trim();
   const baseUrl  = document.getElementById('profileBaseUrl').value.trim();
+  const autoOptimizeSkills = document.getElementById('profileAutoOptimizeSkills').checked;
   if (!name) { toast('请填写配置名称', true); return; }
   if (!provider) { toast('请选择提供商', true); return; }
   if (id) {
-    await api('PUT', `/api/llm-profiles/${id}`, {name, provider, model, api_key: apiKey, base_url: baseUrl});
+    await api('PUT', `/api/llm-profiles/${id}`, {
+      name, provider, model, api_key: apiKey, base_url: baseUrl,
+      auto_optimize_skills: autoOptimizeSkills
+    });
     toast('配置已更新');
   } else {
-    await api('POST', '/api/llm-profiles', {name, provider, model, api_key: apiKey, base_url: baseUrl});
+    await api('POST', '/api/llm-profiles', {
+      name, provider, model, api_key: apiKey, base_url: baseUrl,
+      auto_optimize_skills: autoOptimizeSkills
+    });
     toast('配置已添加');
   }
   hideProfileForm();
@@ -4282,10 +4364,11 @@ async function loadScheduleList() {
     }
     el.innerHTML = `<table style="width:100%">
       <thead><tr>
-        <th>时间</th><th>备注</th><th style="width:70px">启用</th><th style="width:60px">操作</th>
+        <th>时间</th><th>AI 策略</th><th>备注</th><th style="width:70px">启用</th><th style="width:60px">操作</th>
       </tr></thead>
       <tbody>${list.map(s => `<tr>
         <td style="font-family:monospace;font-size:14px;font-weight:700;color:#16a34a">${_schedTimeLabel(s)}</td>
+        <td style="color:#555;font-size:12px">${esc(getProfileChainSummary(s.llm_profile_ids || (s.llm_profile_id ? [s.llm_profile_id] : []), s.llm_consensus_mode || 'single'))}</td>
         <td style="color:#888;font-size:13px">${esc(s.label||'')}</td>
         <td>
           <label class="toggle">
@@ -4361,8 +4444,17 @@ async function submitAddSchedule(type) {
     }
   }
 
-  const llmVal = document.getElementById(`newSched-${type}-llm`)?.value;
-  const body = {type, hour, minute, label, llm_profile_id: llmVal ? parseInt(llmVal) : null};
+  const llmProfileIds = getSelectedProfileIds(`newSched-${type}-llm`);
+  const llmConsensusMode = document.getElementById(`newSched-${type}-consensus`)?.value || 'single';
+  const body = {
+    type,
+    hour,
+    minute,
+    label,
+    llm_profile_id: llmProfileIds[0] || null,
+    llm_profile_ids: llmProfileIds,
+    llm_consensus_mode: llmConsensusMode
+  };
   if (weekday !== null) body.weekday = weekday;
   await api('POST', '/api/scan-schedules', body);
   toast('时间点已添加');
