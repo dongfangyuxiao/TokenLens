@@ -583,12 +583,13 @@ syslog.send_event('scan_completed', ...)
 
 ### 8.3 Prompt 设计
 
-内置五类 Prompt / Skills（`default_prompts.py`），在 LLM 分析阶段即明确任务：
+内置多类 Prompt / Skills（`default_prompts.py`），在 LLM 分析阶段即明确任务：
 - **投毒检测 Prompt**：专注后门、恶意依赖、异常外联
 - **增量审计 Prompt**：专注 RCE、SQL 注入、认证绕过、SSRF 等高影响漏洞
 - **全量审计 Prompt**：全覆盖 OWASP Top 10 及供应链风险
 - **Java Security Prompt**：补齐 Spring / JSP / Java 反序列化、XXE、鉴权绕过、构建投毒
 - **PHP Security Prompt**：补齐文件包含、反序列化、文件上传、Open Redirect、Composer 投毒
+- **Python / Go / Node.js / C# / Ruby / Rust / C/C++ Security Prompt**：针对各语言生态补齐框架、序列化、依赖链、文件处理与供应链风险
 
 ### 8.4 多模型交叉审计
 

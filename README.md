@@ -14,7 +14,7 @@
 - 多模型非单模型策略下，系统会把共识确认过的结果自动沉淀为 adaptive skills，并在后续同类语言/任务扫描中注入 prompt
 - 当使用 `majority / all` 时，系统还会学习“被多数模型否决”的低可信模式，后续自动压制这类弱证据误报
 - AI 配置新增勾选项“启用多模型联合校验后自动优化 skills”，只有勾选该选项的模型参与联合校验时才会触发 skills 自动调整
-- 内置提示词新增 `Java Security` 与 `PHP Security` 两套语言专项 skills，与现有前端/后端/合约模板协同工作
+- 内置提示词扩展为多语言专项 skills，新增 `Java / PHP / Python / Go / Node.js / C# / Ruby / Rust / C/C++`
 - 参考 DVWA 官方模块目录补齐能力项，对齐 `authbypass / bac / cryptography / csp / open_redirect / weak_id / api` 等场景
 - 扫描计划页和手动触发弹窗已支持多模型链与复核策略配置
 - 扫描记录与计划任务表结构新增 `llm_profile_ids`、`llm_consensus_mode`，兼容旧版 `llm_profile_id`
@@ -102,7 +102,7 @@
 登录、扫描、漏洞发现等关键事件实时转发至外部 Syslog 服务器（支持 UDP / TCP），便于接入 SIEM。
 
 **自定义 Prompt**
-内置 Frontend、Backend、Smart Contract、Java Security、PHP Security 五类提示词，支持按文件扩展名匹配，可在 Web 界面自由编辑或新增。
+内置 Frontend、Backend、Smart Contract，以及 Java、PHP、Python、Go、Node.js、C#、Ruby、Rust、C/C++ 等语言专项提示词，支持按文件扩展名匹配，可在 Web 界面自由编辑或新增。
 
 ## DVWA 基准对照
 

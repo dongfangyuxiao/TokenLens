@@ -12,7 +12,7 @@
 - AI 配置表单新增“启用多模型联合校验后自动优化 skills”勾选项，开启后该模型参与联合校验时会自动调整 skills
 - `scan_schedules` 与 `scans` 表新增 `llm_profile_ids`、`llm_consensus_mode` 字段，保留旧版 `llm_profile_id` 兼容
 - 新增 `adaptive_skills` 表与 `/api/adaptive-skills` 接口，用于查看自动优化后的 skills
-- 系统内置新增 `Java Security`、`PHP Security` 两套语言专项 skills / prompts
+- 系统内置新增 `Java / PHP / Python / Go / Node.js / C# / Ruby / Rust / C/C++` 等常见语言专项 skills / prompts
 - 参考 DVWA 官方漏洞模块目录补齐检查项，对齐 `api`、`authbypass`、`bac`、`cryptography`、`csp`、`open_redirect`、`weak_id` 等场景
 - 设置页与扫描触发弹窗新增多模型链配置与复核策略选择
 - 后端提示词补齐 open redirect、weak identifier 等易漏报项

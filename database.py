@@ -10,6 +10,13 @@ from default_prompts import (
     CONTRACT_PROMPT,
     JAVA_PROMPT,
     PHP_PROMPT,
+    PYTHON_PROMPT,
+    GO_PROMPT,
+    NODEJS_PROMPT,
+    CSHARP_PROMPT,
+    RUBY_PROMPT,
+    RUST_PROMPT,
+    CPP_PROMPT,
 )
 
 DB_PATH = os.getenv('DB_PATH', 'audit.db')
@@ -301,6 +308,48 @@ def init_db():
             ('PHP Security', 'backend',
              '.php,.phtml,.phar,.inc,.module,.install,.theme',
              PHP_PROMPT, now))
+        conn.execute("""INSERT OR IGNORE INTO prompts
+            (name, category, extensions, content, is_default, enabled, created_at)
+            VALUES (?,?,?,?,1,1,?)""",
+            ('Python Security', 'backend',
+             '.py',
+             PYTHON_PROMPT, now))
+        conn.execute("""INSERT OR IGNORE INTO prompts
+            (name, category, extensions, content, is_default, enabled, created_at)
+            VALUES (?,?,?,?,1,1,?)""",
+            ('Go Security', 'backend',
+             '.go',
+             GO_PROMPT, now))
+        conn.execute("""INSERT OR IGNORE INTO prompts
+            (name, category, extensions, content, is_default, enabled, created_at)
+            VALUES (?,?,?,?,1,1,?)""",
+            ('Node.js Security', 'backend',
+             '.js,.mjs,.cjs,.ts,.mts,.cts',
+             NODEJS_PROMPT, now))
+        conn.execute("""INSERT OR IGNORE INTO prompts
+            (name, category, extensions, content, is_default, enabled, created_at)
+            VALUES (?,?,?,?,1,1,?)""",
+            ('CSharp Security', 'backend',
+             '.cs,.csx',
+             CSHARP_PROMPT, now))
+        conn.execute("""INSERT OR IGNORE INTO prompts
+            (name, category, extensions, content, is_default, enabled, created_at)
+            VALUES (?,?,?,?,1,1,?)""",
+            ('Ruby Security', 'backend',
+             '.rb,.erb,.rake,.gemspec',
+             RUBY_PROMPT, now))
+        conn.execute("""INSERT OR IGNORE INTO prompts
+            (name, category, extensions, content, is_default, enabled, created_at)
+            VALUES (?,?,?,?,1,1,?)""",
+            ('Rust Security', 'backend',
+             '.rs',
+             RUST_PROMPT, now))
+        conn.execute("""INSERT OR IGNORE INTO prompts
+            (name, category, extensions, content, is_default, enabled, created_at)
+            VALUES (?,?,?,?,1,1,?)""",
+            ('C/C++ Security', 'backend',
+             '.c,.cc,.cpp,.cxx,.h,.hpp,.hh',
+             CPP_PROMPT, now))
         # Migrations for existing databases
         existing_cols = [r['name'] for r in conn.execute("PRAGMA table_info(findings)").fetchall()]
         if 'status' not in existing_cols:
@@ -915,11 +964,24 @@ def delete_prompt(prompt_id):
 
 def reset_prompt(prompt_id):
     """Reset a default prompt's content back to the original."""
-    from default_prompts import FRONTEND_PROMPT, BACKEND_PROMPT, CONTRACT_PROMPT
+    from default_prompts import (
+        FRONTEND_PROMPT, BACKEND_PROMPT, CONTRACT_PROMPT, JAVA_PROMPT, PHP_PROMPT,
+        PYTHON_PROMPT, GO_PROMPT, NODEJS_PROMPT, CSHARP_PROMPT, RUBY_PROMPT,
+        RUST_PROMPT, CPP_PROMPT,
+    )
     defaults = {
         'Frontend':       FRONTEND_PROMPT,
         'Backend':        BACKEND_PROMPT,
         'Smart Contract': CONTRACT_PROMPT,
+        'Java Security': JAVA_PROMPT,
+        'PHP Security': PHP_PROMPT,
+        'Python Security': PYTHON_PROMPT,
+        'Go Security': GO_PROMPT,
+        'Node.js Security': NODEJS_PROMPT,
+        'CSharp Security': CSHARP_PROMPT,
+        'Ruby Security': RUBY_PROMPT,
+        'Rust Security': RUST_PROMPT,
+        'C/C++ Security': CPP_PROMPT,
     }
     with get_conn() as conn:
         row = conn.execute("SELECT name, is_default FROM prompts WHERE id=?", (prompt_id,)).fetchone()

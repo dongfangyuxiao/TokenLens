@@ -34,7 +34,7 @@
 - 新增四种复核策略：`single / any / majority / all`
 - 多模型共识结果会自动优化 skills，后续同类语言扫描会自动增强
 - `majority / all` 下被多数模型否决的低可信模式会自动沉淀，用于压制误报噪音
-- 内置新增 Java Security 与 PHP Security 两套专项提示词
+- 内置新增 Java、PHP、Python、Go、Node.js、C#、Ruby、Rust、C/C++ 等常见语言专项提示词
 
 ### 1.1 2026-03-27 更新要点
 
