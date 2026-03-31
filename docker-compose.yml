@@ -1,7 +1,7 @@
 services:
-  springstillness:
+  tokenlens:
     build: .
-    container_name: springstillness
+    container_name: tokenlens
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -15,3 +15,10 @@ services:
       SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-120}
     volumes:
       - ./data:/app/data
+      - ./keys:/app/keys:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

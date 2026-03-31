@@ -1,0 +1,22 @@
+[Unit]
+Description=TokenLens Code Audit Platform
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/tokenlens
+Environment=BASE_URL=https://audit.example.com
+Environment=DB_PATH=/opt/tokenlens/data/audit.db
+Environment=REPORTS_DIR=/opt/tokenlens/data/reports
+Environment=SYNC_ROOT=/opt/tokenlens/data/synced_repos
+Environment=LICENSE_PUBLIC_KEY_PATH=/opt/tokenlens/keys/license_public.pem
+Environment=SESSION_TTL_MINUTES=720
+Environment=SESSION_IDLE_MINUTES=120
+ExecStart=/opt/tokenlens/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=always
+RestartSec=5
+User=tokenlens
+Group=tokenlens
+
+[Install]
+WantedBy=multi-user.target
