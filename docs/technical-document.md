@@ -1,8 +1,8 @@
-# 探云令安全平台 — 产品技术文档
+# 探云令 TokenLens — 产品技术文档
 
 **版本**：v2.2
 **更新日期**：2026-03-27
-**仓库地址**：https://github.com/dongfangyuxiao/SpringStillness
+**仓库地址**：https://github.com/dongfangyuxiao/TokenLens
 
 ---
 
@@ -30,7 +30,7 @@
 
 ## 1. 产品概述
 
-探云令安全平台是面向企业研发团队的**自动化代码安全审计系统**，通过接入大语言模型（LLM）并整合 Semgrep 静态分析与 OpenSCA 软件成分分析，对多个代码托管平台的每次提交进行安全审计，实时发现注入漏洞、认证缺陷、供应链投毒等高危风险，并通过多渠道即时告警。
+探云令 TokenLens是面向企业研发团队的**自动化代码安全审计系统**，通过接入大语言模型（LLM）并整合 Semgrep 静态分析与 OpenSCA 软件成分分析，对多个代码托管平台的每次提交进行安全审计，实时发现注入漏洞、认证缺陷、供应链投毒等高危风险，并通过多渠道即时告警。
 
 **核心设计原则**
 
@@ -86,7 +86,7 @@
 ## 3. 目录结构
 
 ```
-SpringStillness/
+TokenLens/
 ├── app.py                  # FastAPI 应用入口，路由定义，定时调度
 ├── scanner.py              # 扫描协调器，拉取提交 → 分析 → 存储 → 通知
 ├── analyzer.py             # LLM / Semgrep / OpenSCA 分析引擎
@@ -696,8 +696,8 @@ syslog.send_event('scan_completed', ...)
 ### 12.1 最小化部署
 
 ```bash
-git clone https://github.com/dongfangyuxiao/SpringStillness.git
-cd SpringStillness
+git clone https://github.com/dongfangyuxiao/TokenLens.git
+cd TokenLens
 pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
@@ -711,7 +711,7 @@ Description=春静代码安全平台
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/SpringStillness
+WorkingDirectory=/opt/TokenLens
 ExecStart=/usr/bin/uvicorn app:app --host 0.0.0.0 --port 8000 --workers 1
 Restart=on-failure
 RestartSec=5

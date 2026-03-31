@@ -190,7 +190,7 @@ _FEATURE_LABELS = {
 def _get_license_status():
     cfg = db.get_app_config()
     license_token = (cfg.get('license_token') or '').strip()
-    enforce_enabled = cfg.get('license_enforce_enabled', '0') == '1'
+    enforce_enabled = True  # 授权校验强制开启，不可由客户修改
     machine_code = license_manager.get_machine_code()
     result = license_manager.verify_license_token(
         license_token,
@@ -693,14 +693,6 @@ def get_license_status(_: str = Depends(require_auth)):
     return _get_license_status()
 
 
-class LicenseConfigIn(BaseModel):
-    enforce_enabled: bool = False
-
-
-@app.post('/api/license-config')
-def save_license_config(body: LicenseConfigIn, _: str = Depends(require_auth)):
-    db.set_app_config('license_enforce_enabled', '1' if body.enforce_enabled else '0')
-    return {'ok': True, 'status': _get_license_status()}
 
 @app.get('/api/license/machine-file')
 def download_machine_file(_: str = Depends(require_auth)):
@@ -897,11 +889,28 @@ def resume_scan(operator: str = Depends(require_auth)):
 def list_scans(
     page: int = Query(1, ge=1, description="页码，从1开始"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
+    time_filter: str = Query("all", description="时间筛选"),
+    type_filter: str = Query("all", description="类型筛选"),
+    status_filter: str = Query("all", description="状态筛选"),
+    sort_by: str = Query("started_at", description="排序字段"),
+    sort_order: str = Query("desc", description="排序方向"),
     _: str = Depends(require_auth)
 ):
-    total = db.get_scans_count()
+    total = db.get_scans_count(
+        time_filter=time_filter if time_filter != 'all' else None,
+        type_filter=type_filter if type_filter != 'all' else None,
+        status_filter=status_filter if status_filter != 'all' else None
+    )
     offset = (page - 1) * page_size
-    items = db.get_scans(limit=page_size, offset=offset)
+    items = db.get_scans(
+        limit=page_size,
+        offset=offset,
+        time_filter=time_filter if time_filter != 'all' else None,
+        type_filter=type_filter if type_filter != 'all' else None,
+        status_filter=status_filter if status_filter != 'all' else None,
+        sort_by=sort_by,
+        sort_order=sort_order
+    )
     total_pages = (total + page_size - 1) // page_size
     return {
         "items": items,

@@ -706,36 +706,100 @@ def delete_scan(scan_id: int):
         conn.execute("DELETE FROM scans      WHERE id=?",      (scan_id,))
         conn.commit()
 
-def get_scans(limit=50, offset=0, status_filter=None):
+def get_scans(limit=50, offset=0, time_filter=None, type_filter=None, status_filter=None, sort_by='started_at', sort_order='desc'):
     with get_conn() as conn:
-        sql = "SELECT * FROM scans"
+        sql = "SELECT * FROM scans WHERE 1=1"
         params = []
+        
+        # 时间筛选
+        if time_filter:
+            import datetime
+            now = datetime.datetime.now()
+            if time_filter == 'today':
+                today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                sql += " AND started_at >= ?"
+                params.append(today_start.strftime('%Y-%m-%d %H:%M:%S'))
+            elif time_filter == '7d':
+                days_ago = now - datetime.timedelta(days=7)
+                sql += " AND started_at >= ?"
+                params.append(days_ago.strftime('%Y-%m-%d %H:%M:%S'))
+            elif time_filter == '30d':
+                days_ago = now - datetime.timedelta(days=30)
+                sql += " AND started_at >= ?"
+                params.append(days_ago.strftime('%Y-%m-%d %H:%M:%S'))
+        
+        # 类型筛选
+        if type_filter:
+            sql += " AND scan_type = ?"
+            params.append(type_filter)
+        
+        # 状态筛选
         if status_filter:
-            sql += " WHERE status = ?"
+            sql += " AND status = ?"
             params.append(status_filter)
-        sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
+        
+        # 排序处理
+        valid_sort_columns = ['started_at', 'total_commits', 'critical_count', 'high_count', 'medium_count', 'low_count']
+        if sort_by == 'medium_low':
+            # 中低危合計排序
+            order_col = "(medium_count + low_count)"
+        elif sort_by in valid_sort_columns:
+            order_col = sort_by
+        else:
+            order_col = 'started_at'
+        
+        order_dir = 'DESC' if sort_order == 'desc' else 'ASC'
+        sql += f" ORDER BY {order_col} {order_dir}"
+        
+        sql += " LIMIT ? OFFSET ?"
         params.extend([limit, offset])
+        
         rows = [dict(r) for r in conn.execute(sql, params).fetchall()]
-    for row in rows:
-        try:
-            row['llm_profile_ids'] = json.loads(row.get('llm_profile_ids') or '[]')
-        except Exception:
-            row['llm_profile_ids'] = []
-        row['llm_role_config'] = _normalize_role_config(
-            row.get('llm_role_config'),
-            row.get('llm_profile_ids'),
-            row.get('llm_profile_id'),
-        )
-        row['optimize_skills'] = bool(int(row.get('optimize_skills') or 0))
-    return rows
+        for row in rows:
+            try:
+                row['llm_profile_ids'] = json.loads(row.get('llm_profile_ids') or '[]')
+            except Exception:
+                row['llm_profile_ids'] = []
+            row['llm_role_config'] = _normalize_role_config(
+                row.get('llm_role_config'),
+                row.get('llm_profile_ids'),
+                row.get('llm_profile_id'),
+            )
+            row['optimize_skills'] = bool(int(row.get('optimize_skills') or 0))
+        return rows
 
-def get_scans_count(status_filter=None):
+def get_scans_count(time_filter=None, type_filter=None, status_filter=None):
     with get_conn() as conn:
-        sql = "SELECT COUNT(*) as total FROM scans"
+        sql = "SELECT COUNT(*) as total FROM scans WHERE 1=1"
         params = []
+        
+        # 时间筛选
+        if time_filter:
+            import datetime
+            now = datetime.datetime.now()
+            if time_filter == 'today':
+                today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                sql += " AND started_at >= ?"
+                params.append(today_start.strftime('%Y-%m-%d %H:%M:%S'))
+            elif time_filter == '7d':
+                days_ago = now - datetime.timedelta(days=7)
+                sql += " AND started_at >= ?"
+                params.append(days_ago.strftime('%Y-%m-%d %H:%M:%S'))
+            elif time_filter == '30d':
+                days_ago = now - datetime.timedelta(days=30)
+                sql += " AND started_at >= ?"
+                params.append(days_ago.strftime('%Y-%m-%d %H:%M:%S'))
+        
+        # 类型筛选
+        if type_filter:
+            sql += " AND scan_type = ?"
+            params.append(type_filter)
+        
+        # 状态筛选
         if status_filter:
-            sql += " WHERE status = ?"
+            sql += " AND status = ?"
             params.append(status_filter)
+        
         row = conn.execute(sql, params).fetchone()
         return row['total'] if row else 0
 
