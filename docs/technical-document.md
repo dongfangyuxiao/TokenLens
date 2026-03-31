@@ -1,7 +1,7 @@
 # 探云令 TokenLens — 产品技术文档
 
-**版本**：v2.2
-**更新日期**：2026-03-27
+**版本**：v2.3
+**更新日期**：2026-03-31
 **仓库地址**：https://github.com/dongfangyuxiao/TokenLens
 
 ---
@@ -25,6 +25,7 @@
 15. [版本变更记录](#15-版本变更记录)
 16. [2026-03-26 本次更新](#16-2026-03-26-本次更新)
 17. [2026-03-27 本次更新](#17-2026-03-27-本次更新)
+18. [2026-03-31 本次更新](#18-2026-03-31-本次更新)
 
 ---
 
@@ -707,7 +708,7 @@ uvicorn app:app --host 0.0.0.0 --port 8000
 **使用 systemd 管理进程**：
 ```ini
 [Unit]
-Description=春静代码安全平台
+Description=探云令 TokenLens 代码安全审计平台
 After=network.target
 
 [Service]
@@ -807,8 +808,8 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 - 新增授权临期提醒、界面授权水印，以及基于 `features` 的能力控制
 
 **说明**
-- 当前版本默认不启用授权拦截，仅提供配置和联调能力
-- 当后续手动开启授权校验后，扫描触发、重新扫描与即时分析接口会执行授权状态检查
+- 当前版本授权校验**强制启用**，不可由客户修改（`enforce_enabled = True` 硬编码）
+- 未导入有效授权文件时，扫描触发、重新扫描与即时分析接口将返回 403 并拒绝操作，仅允许登录和系统设置访问
 - 若授权载荷未声明 `features`，则视为全功能授权；声明后将仅放行列出的能力
 
 ### v2.0（2026-03-26）
@@ -835,7 +836,7 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 
 - 新增产品授权模块，支持 HMAC-SHA256 授权文件签发、机器码绑定、导入与状态校验
 - 新增授权临期提醒、顶部授权状态胶囊、右下角授权水印，以及按 `features` 控制功能点
-- 默认不启用授权拦截，授权联调可先上线配置，再按需开启校验
+- 授权校验强制开启，未导入有效 `license.json` 时所有扫描功能均被拦截
 
 - 修复服务启动时误删指定管理员账户的硬编码逻辑
 - 修复管理员删除接口的错误返回不准确问题
@@ -866,3 +867,35 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 - Syslog 转发
 - 漏洞白名单与状态管理
 - 即时检测（代码粘贴 / ZIP 上传）
+
+---
+
+## 18. 2026-03-31 本次更新
+
+本次更新主要完成多模型联合校验链的完整落地、概览仪表盘漏洞穿透跳转以及文档对齐：
+
+**多模型联合校验与 Skills 自动优化**
+- 手动触发、计划任务、历史重跑均支持同时绑定多个 `llm_profile_ids`，并按 `审计 / 检查 / 验证` 三段式角色分配
+- 每个角色可绑定一个或多个模型，组成校验链；典型组合：DeepSeek 审计 → GPT 检查 → Claude 验证
+- `llm_role_config` 字段（JSON：`{"audit":[...],"check":[...],"verify":[...]}`）写入 `scans` 和 `scan_schedules` 表
+- 新增 `adaptive_skills` 表，按 `scan_type + language_key` 维度沉淀多模型共识结果（正向与负向 Skills）
+- 后续同语言、同任务的审计会自动把 adaptive skills 注入 Prompt，提高召回率并压制误报
+- `GET /api/adaptive-skills` 接口支持查询和管理当前沉淀的 adaptive skills
+- AI 配置档案新增 `auto_optimize_skills` 布尔字段，控制该模型是否允许参与 skills 自动优化
+
+**漏洞统计与仪表盘**
+- 概览统计卡片（严重/高危/中危/低危）点击后直接跳转至漏洞列表并按级别预筛选
+- 漏洞列表页新增独立紫色筛选栏，支持按严重级别、处理状态筛选
+- 漏洞统计图表支持点击数据点穿透跳转至对应漏洞列表
+- `GET /api/findings` 接口新增 `severity` 和 `status` 查询参数，支持前端筛选下钻
+
+**授权机制强化**
+- `enforce_enabled` 变更为服务端硬编码 `True`，不再由数据库 `license_enforce_enabled` 字段控制
+- 无有效授权时，所有扫描与即时分析接口返回 HTTP 403，提示导入授权文件
+- 系统设置页保留授权导入入口（机器码展示、上传 `license.json`、查看授权状态）
+
+**内置 Prompt 扩充**
+- 新增 Java、PHP、Python、Go、Node.js、C#、Ruby、Rust、C/C++ 等语言专项安全 Prompt
+- 参考 DVWA 官方模块目录补齐能力项：authbypass、bac、cryptography、csp、open_redirect、weak_id、api 等
+- PHP 专项补齐文件包含（fi）、文件上传（upload）、命令执行（exec）、开放重定向
+- Java 专项补齐认证绕过、越权访问、加密缺陷、XXE、反序列化、构建投毒

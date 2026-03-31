@@ -233,31 +233,32 @@ pre-commit run --all-files
 
 ## 产品授权
 
-当前版本已内置基于 **机器码 + 授权文件** 的授权机制，但默认 **不启用拦截**。  
-代码审计系统仅保留客户侧授权动作：查看机器码、下载机器码文件、导入授权文件、开启本地授权校验。  
+当前版本已内置基于 **机器码 + 授权文件** 的授权机制，且**授权校验强制开启，不可由客户修改**。
+未导入有效授权文件时，所有扫描功能（投毒检测、增量审计、全量审计、即时分析）将被拒绝访问，仅允许登录和系统设置操作。
+代码审计系统仅保留客户侧授权动作：查看机器码、下载机器码文件、导入授权文件（`license.json`）。
 授权签发与授权台账已拆分为独立内部系统，不包含在当前客户交付仓库中。
 
 ### 生产部署示例
 
 仓库已提供可直接改造的部署样例：
 
-- `deploy/systemd/springstillness-audit.service`
-- `deploy/nginx/springstillness.conf`
+- `deploy/systemd/tokenlens-audit.service`
+- `deploy/nginx/tokenlens.conf`
 
 推荐部署步骤：
 
-1. 将项目放到 `/opt/springstillness`
-2. 按实际域名修改 `deploy/nginx/springstillness.conf`
+1. 将项目放到 `/opt/tokenlens`
+2. 按实际域名修改 `deploy/nginx/tokenlens.conf`
 3. 先生成 Ed25519 公私钥
 4. 将公钥放到客户侧代码审计系统
 5. 按实际路径和环境变量修改 `systemd` service 文件
 6. 启动代码审计系统
 
 ```bash
-mkdir -p /opt/springstillness/keys
+mkdir -p /opt/tokenlens/keys
 python3 license_manager.py generate-keypair \
-  --private-key-out /opt/springstillness/keys/license_private.pem \
-  --public-key-out /opt/springstillness/keys/license_public.pem
+  --private-key-out /opt/tokenlens/keys/license_private.pem \
+  --public-key-out /opt/tokenlens/keys/license_public.pem
 ```
 
 其中：
@@ -267,15 +268,15 @@ python3 license_manager.py generate-keypair \
 - 私钥不要下发到代码审计系统
 
 ```bash
-sudo cp deploy/systemd/springstillness-audit.service /etc/systemd/system/
+sudo cp deploy/systemd/tokenlens-audit.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now springstillness-audit
+sudo systemctl enable --now tokenlens-audit
 ```
 
 7. 加载 Nginx 配置
 
 ```bash
-sudo cp deploy/nginx/springstillness.conf /etc/nginx/conf.d/
+sudo cp deploy/nginx/tokenlens.conf /etc/nginx/conf.d/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
