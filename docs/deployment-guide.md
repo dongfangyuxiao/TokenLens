@@ -1,7 +1,7 @@
 # TokenLens 代码安全审计平台 · 部署手册
 
 > 版本：2026-03
-> 适用：TokenLens 正式发布版（PyArmor 混淆包）
+> 适用：TokenLens 正式发布版（Cython 编译保护包）
 
 ---
 
@@ -38,7 +38,7 @@
 
 - 最低要求：**Python 3.10**
 - 推荐版本：**Python 3.11 或 3.12**
-- PyArmor 混淆包依赖运行时，不需要额外安装 pyarmor
+- 核心模块已通过 Cython 编译为 `.so` 二进制文件，无需额外安装编译工具
 
 ### 硬件资源
 
@@ -402,16 +402,15 @@ systemctl restart tokenlens-audit
 
 ```
 /opt/tokenlens/
-├── app.py                  # 主应用（PyArmor 混淆）
-├── database.py             # 数据库层（PyArmor 混淆）
-├── license_manager.py      # 授权管理（PyArmor 混淆）
-├── scanner.py              # 扫描引擎（PyArmor 混淆）
-├── reporter.py             # 报告生成（PyArmor 混淆）
-├── notifier.py             # 通知模块（PyArmor 混淆）
-├── syslog_sender.py        # Syslog 推送（PyArmor 混淆）
-├── repo_sync.py            # 仓库同步（PyArmor 混淆）
-├── default_prompts.py      # 默认提示词（PyArmor 混淆）
-├── pyarmor_runtime_*/      # PyArmor 运行时（混淆依赖，勿删除）
+├── app*.so                 # 主应用（Cython 编译二进制）
+├── database*.so            # 数据库层（Cython 编译二进制）
+├── license_manager*.so     # 授权管理（Cython 编译二进制）
+├── scanner*.so             # 扫描引擎（Cython 编译二进制）
+├── reporter*.so            # 报告生成（Cython 编译二进制）
+├── notifier*.so            # 通知模块（Cython 编译二进制）
+├── syslog_sender*.so       # Syslog 推送（Cython 编译二进制）
+├── repo_sync*.so           # 仓库同步（Cython 编译二进制）
+├── default_prompts*.so     # 默认提示词（Cython 编译二进制）
 ├── requirements.txt        # Python 依赖列表
 ├── VERSION                 # 版本号文件
 ├── static/                 # 前端静态文件
@@ -434,7 +433,7 @@ systemctl restart tokenlens-audit
 
 **重要说明：**
 
-- `pyarmor_runtime_*/` 目录是 PyArmor 混淆运行时，**不得删除**，否则混淆模块无法运行
+- `*.so` 文件是 Cython 编译的二进制模块，**不得删除**，否则服务无法启动
 - `keys/license_public.pem` 是授权验证公钥，**不得删除或修改**
 - `data/` 目录包含所有运行数据，**需要定期备份**
 
@@ -598,11 +597,11 @@ rm -rf /opt/tokenlens/data/synced_repos/*
 
 ### 保护方案
 
-TokenLens 使用 **PyArmor 8.x** 对核心 Python 文件进行混淆保护，防止客户直接阅读业务逻辑代码。
+TokenLens 使用 **Cython** 将核心 Python 文件编译为 `.so` 二进制模块进行源码保护，防止客户直接阅读业务逻辑代码。编译后的 `.so` 文件为本机二进制，无法反推出原始 Python 源码。
 
-混淆的文件包括：`app.py`、`database.py`、`license_manager.py`、`scanner.py`、`reporter.py`、`notifier.py`、`syslog_sender.py`、`repo_sync.py`、`default_prompts.py`
+编译保护的文件包括：`app.py`、`database.py`、`license_manager.py`、`scanner.py`、`reporter.py`、`notifier.py`、`syslog_sender.py`、`repo_sync.py`、`default_prompts.py`
 
-静态资源（`static/`）和配置文件**不混淆**，直接原样打包。
+静态资源（`static/`）、`clients/` 目录和配置文件**不编译**，直接原样打包。
 
 ### 构建部署包
 
@@ -619,26 +618,27 @@ bash build_package.sh
 bash build_package.sh 1.2.0
 ```
 
+**构建依赖：**
+
+- `python3`、`python3-venv`、`gcc`（系统包）
+- `Cython`、`setuptools`（脚本会在临时虚拟环境中自动准备）
+
 **构建流程：**
 
-1. 检查并安装 PyArmor（如果未安装）
-2. 用 `pyarmor gen` 混淆所有核心 Python 文件，输出到临时目录
-3. 复制 `static/`、`requirements.txt`、`deploy/` 等非 Python 文件
-4. 复制 `keys/license_public.pem`（**不复制私钥**）
-5. 写入 `VERSION` 文件
-6. 打包为 `tokenlens-<版本号>.tar.gz`
+1. 检查 `python3`、`python3-venv` 和 `gcc` 是否可用，必要时创建临时虚拟环境准备 Cython
+2. 将核心 `.py` 文件复制到临时目录，生成 `setup.py`
+3. 执行 `python3 setup.py build_ext --inplace`，通过 Cython 编译为 `.so` 二进制
+4. 将 `.so` 文件（不含源码 `.py`）复制到部署包
+5. 原样复制 `clients/`、`static/`、`requirements.txt`、`deploy/` 等运行所需文件
+6. 复制 `keys/license_public.pem`（**不复制私钥**）
+7. 写入 `VERSION` 文件，打包为 `tokenlens-<版本号>.tar.gz`
 
 **注意事项：**
 
 - 构建前确保本地 `keys/license_public.pem` 是最新的公钥
 - `keys/license_private.pem`（私钥）绝对不能打入包中，`build_package.sh` 只复制公钥
-- 混淆后的代码依赖 `pyarmor_runtime_*/` 目录，打包时 PyArmor 会自动生成并包含
-- 建议在与目标客户相同架构的机器上构建（x86_64 Linux），避免跨平台问题
-
-### PyArmor 许可证
-
-- PyArmor 8.x 免费版有文件数量限制，建议购买 Basic 或以上版本
-- PyArmor 许可证文件存放于构建机的 `~/.pyarmor/` 目录，不需要打入部署包
+- `.so` 文件与 CPU 架构和 Python 版本绑定，**必须在与目标客户相同架构的机器上构建**（x86_64 Linux），避免跨平台运行失败
+- 客户服务器需安装与构建时版本一致的 Python（如 Python 3.11）
 
 ### 交付流程
 

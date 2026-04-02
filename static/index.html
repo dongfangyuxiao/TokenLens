@@ -1524,14 +1524,44 @@ body.light .empty{
         <!-- 粘贴模式 -->
         <div id="ia_panel_paste">
           <div style="font-size:13px;color:#888;margin-bottom:16px">
-            粘贴任意代码片段直接进行 AI 安全审计，无需 git commit。
+            粘贴任意代码片段直接进行 AI 安全审计，无需 git commit。支持多 AI 引擎交叉审计。
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>AI 模型</label>
-              <select id="iaLlm" style="width:100%">
+              <label>AI 模型配置</label>
+              <select id="iaLlm" style="width:100%" onchange="iaLLMChange('paste')">
                 <option value="">全局配置</option>
+                <option value="custom">自定义多引擎配置</option>
               </select>
+            </div>
+          </div>
+          <!-- 多引擎配置区域 -->
+          <div id="ia_engine_config_paste" style="display:none;margin-bottom:16px;padding:16px;background:#f9f9f9;border-radius:8px;border:1px solid #e8e8e8">
+            <div style="font-size:13px;font-weight:600;margin-bottom:12px">🔀 交叉审计链配置</div>
+            <div class="form-row col3">
+              <div class="form-group">
+                <label style="font-size:12px">审计引擎 (Audit)</label>
+                <select id="ia_audit_llm_paste" multiple size="3" style="width:100%;height:auto;font-size:12px"></select>
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px">检查引擎 (Check)</label>
+                <select id="ia_check_llm_paste" multiple size="3" style="width:100%;height:auto;font-size:12px"></select>
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px">验证引擎 (Verify)</label>
+                <select id="ia_verify_llm_paste" multiple size="3" style="width:100%;height:auto;font-size:12px"></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label style="font-size:12px">共识模式</label>
+                <select id="ia_consensus_mode_paste" style="width:150px;font-size:12px">
+                  <option value="single">单引擎</option>
+                  <option value="majority">多数表决</option>
+                  <option value="unanimous">一致通过</option>
+                  <option value="priority">优先级优先</option>
+                </select>
+              </div>
             </div>
           </div>
           <div class="form-row col2">
@@ -1560,14 +1590,44 @@ body.light .empty{
         <!-- 上传模式 -->
         <div id="ia_panel_upload" style="display:none">
           <div style="font-size:13px;color:#888;margin-bottom:16px">
-            上传单个文件、多个文件、整个文件夹或 ZIP 压缩包，批量进行 AI 安全审计。
+            上传单个文件、多个文件、整个文件夹或 ZIP 压缩包，批量进行 AI 安全审计。支持多 AI 引擎交叉审计。
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>AI 模型</label>
-              <select id="iaUploadLlm" style="width:100%">
+              <label>AI 模型配置</label>
+              <select id="iaUploadLlm" style="width:100%" onchange="iaLLMChange('upload')">
                 <option value="">全局配置</option>
+                <option value="custom">自定义多引擎配置</option>
               </select>
+            </div>
+          </div>
+          <!-- 多引擎配置区域 -->
+          <div id="ia_engine_config_upload" style="display:none;margin-bottom:16px;padding:16px;background:#f9f9f9;border-radius:8px;border:1px solid #e8e8e8">
+            <div style="font-size:13px;font-weight:600;margin-bottom:12px">🔀 交叉审计链配置</div>
+            <div class="form-row col3">
+              <div class="form-group">
+                <label style="font-size:12px">审计引擎 (Audit)</label>
+                <select id="ia_audit_llm_upload" multiple size="3" style="width:100%;height:auto;font-size:12px"></select>
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px">检查引擎 (Check)</label>
+                <select id="ia_check_llm_upload" multiple size="3" style="width:100%;height:auto;font-size:12px"></select>
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px">验证引擎 (Verify)</label>
+                <select id="ia_verify_llm_upload" multiple size="3" style="width:100%;height:auto;font-size:12px"></select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label style="font-size:12px">共识模式</label>
+                <select id="ia_consensus_mode_upload" style="width:150px;font-size:12px">
+                  <option value="single">单引擎</option>
+                  <option value="majority">多数表决</option>
+                  <option value="unanimous">一致通过</option>
+                  <option value="priority">优先级优先</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -3310,7 +3370,8 @@ async function _refreshFindings(scanId, showLoading = false) {
   _allFindings = findings;
   _repoOwnerMap = ownerMap;
   if (_findingsLiveMode) {
-    const row = (scans || []).find(s => s.id === scanId);
+    const scanItems = Array.isArray(scans) ? scans : (scans?.items || []);
+    const row = scanItems.find(s => s.id === scanId);
     const status = row?.status || 'running';
     const liveTag = ['running', 'paused'].includes(status) ? '实时刷新中' : '已完成';
     document.getElementById('findingsTitle').textContent =
@@ -4492,11 +4553,60 @@ function iaClearFiles() {
   _setInstantExportData('upload', []);
 }
 
+function iaLLMChange(mode) {
+  const sel = document.getElementById(mode === 'paste' ? 'iaLlm' : mode === 'upload' ? 'iaUploadLlm' : 'iaRepoLlm');
+  const configDiv = document.getElementById('ia_engine_config_' + mode);
+  if (!sel || !configDiv) return;
+  if (sel.value === 'custom') {
+    configDiv.style.display = '';
+    iaPopulateEngineSelects(mode);
+  } else {
+    configDiv.style.display = 'none';
+  }
+}
+
+function iaPopulateEngineSelects(mode) {
+  const suffix = mode === 'paste' ? '_paste' : mode === 'upload' ? '_upload' : '_repo';
+  const auditSel = document.getElementById('ia_audit_llm' + suffix);
+  const checkSel = document.getElementById('ia_check_llm' + suffix);
+  const verifySel = document.getElementById('ia_verify_llm' + suffix);
+  if (!auditSel || !_llmProfiles.length) return;
+  const opts = _llmProfiles.map(p => `<option value="${p.id}">${esc(p.name)} (${p.provider})</option>`).join('');
+  auditSel.innerHTML = opts;
+  checkSel.innerHTML = opts;
+  verifySel.innerHTML = opts;
+}
+
+function iaGetEngineConfig(mode) {
+  const sel = document.getElementById(mode === 'paste' ? 'iaLlm' : mode === 'upload' ? 'iaUploadLlm' : 'iaRepoLlm');
+  if (!sel || sel.value !== 'custom') return { llm_profile_ids: [], llm_consensus_mode: 'single', llm_role_config: {} };
+  
+  const suffix = mode === 'paste' ? '_paste' : mode === 'upload' ? '_upload' : '_repo';
+  const auditSel = document.getElementById('ia_audit_llm' + suffix);
+  const checkSel = document.getElementById('ia_check_llm' + suffix);
+  const verifySel = document.getElementById('ia_verify_llm' + suffix);
+  const consensusSel = document.getElementById('ia_consensus_mode' + suffix);
+  
+  const audit = Array.from(auditSel.selectedOptions).map(o => parseInt(o.value));
+  const check = Array.from(checkSel.selectedOptions).map(o => parseInt(o.value));
+  const verify = Array.from(verifySel.selectedOptions).map(o => parseInt(o.value));
+  const consensus = consensusSel?.value || 'single';
+  
+  const allIds = [...new Set([...audit, ...check, ...verify])];
+  
+  return {
+    llm_profile_ids: allIds,
+    llm_consensus_mode: consensus,
+    llm_role_config: { audit, check, verify }
+  };
+}
+
 async function runInstantAnalysis() {
   const filename = document.getElementById('ia_filename').value.trim() || 'snippet.py';
   const code     = document.getElementById('ia_code').value.trim();
   const language = document.getElementById('ia_lang').value.trim();
   const llmVal   = document.getElementById('iaLlm')?.value || '';
+  const engineCfg = iaGetEngineConfig('paste');
   if (!code) { toast('请输入代码内容', true); return; }
   const btn    = document.getElementById('iaBtn');
   const status = document.getElementById('iaStatus');
@@ -4507,10 +4617,14 @@ async function runInstantAnalysis() {
   try {
     const r = await api('POST', '/api/analyze/instant', {
       filename, code, language,
-      llm_profile_id: llmVal ? parseInt(llmVal) : null
+      llm_profile_id: llmVal && llmVal !== 'custom' ? parseInt(llmVal, 10) : null,
+      llm_profile_ids: engineCfg.llm_profile_ids || [],
+      llm_consensus_mode: engineCfg.llm_consensus_mode || 'single',
+      llm_role_config: engineCfg.llm_role_config || {}
     });
-    status.textContent = `分析完成，发现 ${r.findings.length} 个问题`;
+    status.textContent = `分析完成，发现 ${r.findings.length} 个问题 (扫描记录 #${r.scan_id})`;
     renderInstantFindings(filename, r.findings, r.summary);
+    if (typeof loadDash === 'function') loadDash();
   } catch(e) {
     status.textContent = '';
     toast(e.message, true);
@@ -4522,6 +4636,7 @@ async function runInstantAnalysis() {
 async function runInstantUpload() {
   if (!_iaFiles.length) { toast('请先选择文件', true); return; }
   const llmVal = document.getElementById('iaUploadLlm')?.value || '';
+  const engineCfg = iaGetEngineConfig('upload');
   const btn    = document.getElementById('iaUploadBtn');
   const status = document.getElementById('iaUploadStatus');
   btn.disabled = true; btn.textContent = '分析中…';
@@ -4531,7 +4646,10 @@ async function runInstantUpload() {
 
   const fd = new FormData();
   for (const f of _iaFiles) fd.append('files', f, f.webkitRelativePath || f.name);
-  if (llmVal) fd.append('llm_profile_id', llmVal);
+  if (llmVal && llmVal !== 'custom') fd.append('llm_profile_id', llmVal);
+  if ((engineCfg.llm_profile_ids || []).length) fd.append('llm_profile_ids', engineCfg.llm_profile_ids.join(','));
+  fd.append('llm_consensus_mode', engineCfg.llm_consensus_mode || 'single');
+  fd.append('llm_role_config', JSON.stringify(engineCfg.llm_role_config || {}));
 
   try {
     const token = getToken();
@@ -4550,8 +4668,10 @@ async function runInstantUpload() {
       throw new Error(err.detail || resp.statusText);
     }
     const r = await resp.json();
-    status.textContent = `分析完成，共 ${r.files.length} 个文件，发现 ${r.total_findings} 个问题`;
+    status.textContent = `分析完成，共 ${r.files.length} 个文件，发现 ${r.total_findings} 个问题 (扫描记录 #${r.scan_id})`;
     renderInstantUploadResults(r.files, 'upload');
+    // 刷新扫描历史显示
+    if (typeof loadDash === 'function') loadDash();
   } catch(e) {
     status.textContent = '';
     toast(e.message, true);
@@ -4563,6 +4683,7 @@ async function runInstantUpload() {
 async function runInstantRepoUrl() {
   const repoUrl = document.getElementById('ia_repo_url')?.value.trim();
   const llmVal  = document.getElementById('iaRepoLlm')?.value || '';
+  const engineCfg = iaGetEngineConfig('repo');
   const btn     = document.getElementById('iaRepoBtn');
   const status  = document.getElementById('iaRepoStatus');
   if (!repoUrl) { toast('请输入仓库 URL', true); return; }
@@ -4575,10 +4696,14 @@ async function runInstantRepoUrl() {
   try {
     const r = await api('POST', '/api/analyze/instant-repo-url', {
       repo_url: repoUrl,
-      llm_profile_id: llmVal ? parseInt(llmVal, 10) : null
+      llm_profile_id: llmVal && llmVal !== 'custom' ? parseInt(llmVal, 10) : null,
+      llm_profile_ids: engineCfg.llm_profile_ids || [],
+      llm_consensus_mode: engineCfg.llm_consensus_mode || 'single',
+      llm_role_config: engineCfg.llm_role_config || {}
     });
-    status.textContent = `分析完成，共 ${r.files.length} 个文件，发现 ${r.total_findings} 个问题`;
+    status.textContent = `分析完成，共 ${r.files.length} 个文件，发现 ${r.total_findings} 个问题 (扫描记录 #${r.scan_id})`;
     renderInstantUploadResults(r.files, 'repo');
+    if (typeof loadDash === 'function') loadDash();
   } catch (e) {
     status.textContent = '';
     const msg = (e && e.message) ? e.message : '';
