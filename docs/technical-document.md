@@ -870,7 +870,24 @@ cp audit.db audit.db.bak.$(date +%Y%m%d)
 
 ---
 
-## 18. 2026-03-31 本次更新
+## 18. 2026-04-02 本次更新
+
+本次更新主要完成即时分析的多引擎共识功能：
+
+**即时分析多引擎共识**
+- 即时分析（粘贴代码/上传文件/仓库 URL）支持多引擎并行分析
+- 新增 `llm_profile_ids`、`llm_consensus_mode`、`llm_role_config` 参数支持
+- 支持三种共识模式：`single`（单引擎）、`majority`（投票制）、`all`（全票通过）
+- 支持角色分工模式：可为审计/检查/验证三个角色分别配置不同引擎
+- 即时分析结果展示各引擎独立分析结果和最终共识结果
+- `POST /api/analyze/instant`、`POST /api/analyze/instant-upload`、`POST /api/analyze/instant-repo-url` 接口均支持多引擎参数
+
+**代码优化**
+- `_instant_prepare_runtime` 函数统一处理多引擎配置逻辑
+- `_collect_role_profile_ids` 函数提取角色配置中的所有引擎 ID
+- 即时分析接口统一使用多引擎分析流程
+
+## 19. 2026-03-31 本次更新
 
 本次更新主要完成多模型联合校验链的完整落地、概览仪表盘漏洞穿透跳转以及文档对齐：
 
